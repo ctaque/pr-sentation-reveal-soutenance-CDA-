@@ -49,7 +49,7 @@
           <p>Ou</p>
           <p style="display:flex; justify-content: center; align-items:center; gap: 1rem;" >
             <img src="/images/vscode.png" width="50"/>
-            VSCode
+            VSCode + extensions
           </p>
 				</section>
 				<section>
@@ -799,29 +799,33 @@ http://localhost:3000
 </script></code></pre>
 </section>
 <section>
-<h3>Cookie d'authentification: httpOnly</h3>
+<h3>Sécuriser un Cookie: httpOnly</h3>
 </section>
 <section>
 <h3>Audit de sécurité IA</h3>
 </section>
 <section>
-<h3>Projet FastAndFar.app</h3>
-<p>Une plateforme pour planifier, enregistrer et partager des activités sportives en plein air.</p>
+<h3>FastAndFar.app</h3>
+<small>Vibe codé, hobby project</small>
+<p style="font-size: 60%;">Une plateforme pour planifier, enregistrer et partager des activités sportives de plein air.</p>
 </section>
 <section>
 <h3>Contexte</h3>
-<p><a href="https://fastandfar.app">FastAndFar</a> est une app gratuite, au financement basé sur le volontariat </p>
+<p><a href="https://fastandfar.app">FastAndFar</a> est une app gratuite, son financement est basé sur le volontariat</p>
+</section>
+<section>
+<h3>Interfaces utilisateur</h3>
 </section>
 <section>
 <h3>Fil d'actualité</h3>
 <img src="/images/faf1.png" />
 </section>
 <section>
-<h3>Exploration</h3>
+<h3>Carte d'exploration</h3>
 <img src="/images/faf2.png" />
 </section>
 <section>
-<h3>Planification</h3>
+<h3>Planificateur</h3>
 <img src="/images/faf3.png" />
 </section>
 <section>
@@ -830,15 +834,35 @@ http://localhost:3000
 </section>
 <section>
 <h3>Installation de l'environnement de dev</h3>
-<p>Rust</p>
 <pre><code class="language-bash">
+#Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 rustup component add clippy # Rust linter
 rustup component add rust-analyzer # Rust LSP
 rustup component add rustfmt # Rust code formatter
 cargo binstall cargo-watch # file watch
+
+#Nodejs, pnpm package manager
+brew install nvm pnpm
+sudo dnf install nvm pnpm
+
 </code></pre>
+</section>
+<section>
+<h3>Schema de bdd</h3>
+<p>Migrations</p>
+<p>TODO</p>
+</section>
+<section>
+<h3>Composants d'accès aux données </h3>
+<p>(sql)</p>
+<p>TODO</p>
+</section>
+<section>
+<h3>Tests</h3>
+<p>Automatisés ou non</p>
+<p>TODO</p>
 </section>
 <section>
 <h3>CI/CD : tests automatisés et déploiement sur Github Actions</h3>
@@ -1082,9 +1106,6 @@ jobs:
 </script></code></pre>
 </section>
 <section>
-
-</section>
-<section>
 <h3>Dockerfile</h3>
 <pre style="font-size: 35%;"><code class="language-dockerfile" data-trim><script type="text/template">
 # ─── Stage 1: Cargo chef – compute dependency recipe ─────────────────────────
@@ -1152,7 +1173,7 @@ CMD ["./server"]
 </section>
 <section>
 <h3>Déploiement Blue/Green sur un serveur avec Nomad</h3>
-<pre style="font-size: 30%"><code class="terraform">
+<pre style="font-size: 30%"><code class="terraform" data-trim><script type="text/template">
 variable "image_tag" {
   type    = string
   default = "latest"
@@ -1296,7 +1317,7 @@ EOT
     }
   }
 }
-</code></pre>
+</script></code></pre>
 </section>
 			</div>
 		</div>
