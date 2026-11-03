@@ -801,6 +801,279 @@ http://localhost:3000
 </code>
 </pre>
 </section>
+<section>
+<h3>Cookie d'authentification: httpOnly</h3>
+</section>
+<section>
+<h3>Audit de sécurité IA</h3>
+</section>
+<section>
+<h3>Deuxième projet</h3>
+<p>FastAndFar.app</p>
+<p>Une plateforme pour planifier, enregistrer et partager des activité sportives en plein air.</p>
+</section>
+<section>
+<h3>Contexte</h3>
+<p><a href="https://fastandfar.app">FastAndFar</a> est une app gratuite, au financement basé sur le volontariat </p>
+</section>
+<section>
+<h3>Fil d'actualité</h3>
+<img src="/images/faf1.png" />
+</section>
+<section>
+<h3>Exploration</h3>
+<img src="/images/faf2.png" />
+</section>
+<section>
+<h3>Planification</h3>
+<img src="/images/faf3.png" />
+</section>
+<section>
+<h3>Suivi d'itinéraire</h3>
+<img src="/images/faf4.png" width="300" />
+</section>
+<section>
+<h3>CI/CD Github Actions</h3>
+<pre style="font-size: 30%">
+<code>
+name: Build & Push Docker Image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+
+  # ───────────────────────────────────────────────────────────────
+  # TESTS FONCTIONNELS
+  # ───────────────────────────────────────────────────────────────
+  test:
+    name: Functional Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grvl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/grvl_test
+      SQLX_OFFLINE: "true"
+      # Valeurs fictives — les services externes ne sont pas appelés pendant les tests
+      MAIL_FROM: test@example.com
+      HTTP_PORT: "8080"
+      WEATHERAPI_KEY: test
+      ANTHROPIC_API_KEY: test
+      OPENROUTESERVICE_TOKEN: test
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      S3_BUCKET_NAME: test-bucket
+      RESEND_TOKEN: test
+      CARGO_TARGET_DIR: /mnt/target
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache
+          sudo docker image prune --all --force || true
+          df -h
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enlarge swap
+        run: |
+          sudo swapoff /swapfile || true
+          sudo fallocate -l 8G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+
+      - name: Prepare Cargo target directory
+        run: |
+          sudo mkdir -p /mnt/target
+          sudo chown "$USER" /mnt/target
+
+      - name: Cache Rust toolchain & tools
+        id: cache-rust-test
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.rustup/toolchains
+            ~/.rustup/update-hashes
+            ~/.cargo/bin
+          key: test-rust-stable-${{ runner.os }}-v1
+
+      - name: Install Rust
+        if: steps.cache-rust-test.outputs.cache-hit != 'true'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable --profile minimal
+
+      - name: Add Cargo to PATH
+        run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Set Rust default toolchain
+        run: rustup default stable
+
+      - name: Cache Cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: test-cargo-registry-${{ hashFiles('Cargo.lock') }}
+          restore-keys: test-cargo-registry-
+
+      - name: Cache Cargo target
+        uses: actions/cache@v4
+        with:
+          path: /mnt/target
+          key: test-cargo-target-${{ hashFiles('Cargo.lock') }}-${{ hashFiles('src/**/*.rs', 'Cargo.toml') }}
+          restore-keys: |
+            test-cargo-target-${{ hashFiles('Cargo.lock') }}-
+            test-cargo-target-
+
+      - name: Install sqlx-cli
+        if: steps.cache-rust-test.outputs.cache-hit != 'true'
+        run: cargo install sqlx-cli --no-default-features --features rustls,postgres
+
+      # postgis/postgis ne fournit pas pgvector (requis par la recherche sémantique).
+      # Si l'image est sur bullseye (EOL), son dépôt pgdg a été déplacé sur apt-archive.postgresql.org.
+      - name: Install pgvector in Postgres service
+        run: |
+          docker exec ${{ job.services.postgres.id }} sh -c "sed -i '/bullseye/s#https\?://apt.postgresql.org#https://apt-archive.postgresql.org#' /etc/apt/sources.list.d/*; apt-get update -qq && apt-get install -y -qq postgresql-16-pgvector"
+
+      - name: Run migrations
+        run: sqlx migrate run
+
+      - name: Create frontend/dist placeholder
+        run: mkdir -p frontend/dist
+
+      - name: Run functional tests
+        run: cargo test --features integration
+
+  # ───────────────────────────────────────────────────────────────
+  # BUILD & PUSH (Docker Hub)
+  # ───────────────────────────────────────────────────────────────
+  docker-build-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [test]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_GIT_HASH: ${{ github.sha }}
+          VITE_GOOGLE_AUTH_CALLBACK: ${{ vars.VITE_GOOGLE_AUTH_CALLBACK }}
+          VITE_APPLE_CLIENT_ID: ${{ vars.VITE_APPLE_CLIENT_ID }}
+        run: pnpm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: docker-hub.fastandfar.app
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build & push image
+        run: |
+          GIT_SHA=${GITHUB_SHA::7}
+          docker buildx build \
+            --platform linux/amd64 \
+            --cache-from type=gha \
+            --cache-to type=gha,mode=max \
+            -t docker-hub.fastandfar.app/ctaque/fastandfar:$GIT_SHA \
+            -t docker-hub.fastandfar.app/ctaque/fastandfar:latest \
+            --push .
+
+  # ───────────────────────────────────────────────────────────────
+  # DEPLOY (Nomad)
+  # ───────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Nomad
+    runs-on: ubuntu-latest
+    needs: [docker-build-push]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          cat > ~/.ssh/config << EOF
+          Host nomad-server
+            HostName ${{ secrets.DROPLET_IP }}
+            User root
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+            UserKnownHostsFile /dev/null
+            LogLevel ERROR
+          EOF
+
+          chmod 600 ~/.ssh/config
+
+      - name: Upload Nomad job file
+        run: scp nomad/fastandfar.nomad.hcl nomad-server:/tmp/fastandfar.nomad.hcl
+
+      - name: Run Nomad job
+        env:
+          NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          GIT_SHA=${GITHUB_SHA::7}
+          timeout 2h ssh nomad-server "NOMAD_TOKEN='$NOMAD_TOKEN' nomad job run -var='image_tag=${GIT_SHA}' -var='docker_username=${DOCKER_USERNAME}' -var='docker_password=${DOCKER_PASSWORD}' /tmp/fastandfar.nomad.hcl"
+</code></pre>
+</section>
 			</div>
 		</div>
 
