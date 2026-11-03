@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 	<head>
 		<meta charset="utf-8" />
 		<meta
@@ -19,6 +19,26 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
+				<section>
+          <h3>Présentation</h3>
+          <p>Cyprien Taque, développeur full stack avec 7 ans d'expérience, issue d'une reversion réussie de l'industrie.</p>
+				</section>
+				<section>
+          <h3>Premier projet</h3>
+          <h3>La Billetterie Cine.Boutique</h3>
+          <br/>
+          <p>https://nantesleconcorde.cine.boutique</p>
+          <p>https://fougeresleclub.cine.boutique</p>
+          <p>200+ clients</p>
+        </section>
+				<section>
+          <h3>Contexte</h3>
+          <p>Dématérialisation</p>
+          <p>Festivals</p>
+          <p>Réduction des temps d'attentes en files de caisse</p>
+          <p>Réservations possibles H/24 7/7j</p>
+          <p>Réduction des coûts</p>
+				</section>
 				<section>
 					<h3>
             Environnement dev
@@ -187,28 +207,600 @@ MAUTIC_PORT=8080
 </script></code></pre>
 				</section>
 				<section>
-          <h3>UI: Home page Cine-Boutique</h3>
+          <h3>Interfaces utilisateur</h3>
+          <h4>Cine.boutique</h4>
+        </section>
+				<section>
+          <h3>Ecran Home page</h3>
           <img src="/images/home-vad.png" width="800" />
 				</section>
 				<section>
-          <h3>UI: Ecran programme des séances Cine-Boutique</h3>
+          <h3>Programme des séances</h3>
           <img src="/images/schedule-vad.png" width="800" />
 				</section>
 				<section>
-          <h3>UI: Ecran tarifs Cine-Boutique</h3>
+          <h3>tarifs</h3>
           <img src="/images/tarifs-vad.png" width="800" />
 				</section>
 				<section>
-          <h3>UI: Ecran panier Cine-Boutique</h3>
+          <h3>panier</h3>
           <img src="/images/panier-vad.png" width="800" />
 				</section>
 				<section>
-          <h3>UI: Ecran paiement Cine-Boutique</h3>
+          <h3>paiement</h3>
           <img src="/images/paiement-vad.png" width="800" />
 				</section>
 				<section>
-					<a href="https://excalidraw.com/#json=12RowvmGLyd1isIfxjFpq,1hoJoEKoSuMWT_wmXi09bw" target="_blank">🔗 Schema  d'infra</a>
+          <h3>Réservations</h3>
+          <img src="/images/réservations-vad.png" width="800" />
 				</section>
+				<section>
+          <h3>E-Billet</h3>
+          <img src="/images/billet-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>Responsive design</h3>
+          <img src="/images/responsive1.png" width="200" />
+          <img src="/images/responsive2.png" width="200" />
+          <img src="/images/responsive3.png" width="200" />
+          <img src="/images/responsive4.png" width="200" />
+				</section>
+				<section>
+					<p>Composant métier</p>
+<p style="font-size: 70%;">I/O: Panier du frontend / payload transaction java</p>
+          <pre style="font-size: 30%;"><code class="language-typescript" data-trim>
+export const createTransaction = async (
+    uuid: string,
+    shoppingCartItems: any,
+    cinema: string,
+    account: string,
+    erpentity: number,
+    clientAmount: number,
+    toBillAmount: number, // Part à facturer
+    socId: number,
+    apiToken: string,
+    i18n: I18next,
+    fromAllocine: boolean,
+) => {
+    const { t } = i18n;
+    const ticketsForInvoice = shoppingCartItems.filter((item: any) =>
+        item.productType === productType.Ticket
+        || item.productType === productType.LoyaltyCardTicket
+        || item.productType === productType.LoyaltyCardPreferentialTariff
+        || item.productType === productType.LoyaltyVoucherTicket
+        || item.productType === productType.VoucherTicket
+        || item.productType === productType.CipTicket
+        || item.productType === productType.TransactionSupplement
+        || item.productType === productType.Superticket
+        || item.productType === productType.LoyaltyProduct,
+    );
+    const ticketsForInvoiceWithBarcode = shoppingCartItems.filter((item: any) => item.productType === productType.ProductWithBarcodeOnInvoice);
+    const currentCinema = await getCurrentCinema(cinema, account);
+    const paiementTypes = await getCachedData(cinema, account, 'paiementtype');
+    const voucherTypes = await getCachedData(cinema, account, 'vouchertype');
+    const loyaltyProducts = await getCachedData(cinema, account, 'loyaltyproduct');
+    const tariffSupplements = await getCachedData(cinema, account, 'tariffsupplement');
+    const ticketSupplement = tariffSupplements.find((item: any) => item.internetSupplementPerTicket === true);
+    const CRDPaiementType = paiementTypes.find((item: any) => item.internalcode === paiementTypeCode.CRD); // carte bancaire
+    const LTCPaiementType = paiementTypes.find((item: any) => item.internalcode === paiementTypeCode.LTC); // loyaltycard
+    const LTVPaiementType = paiementTypes.find((item: any) => item.internalcode === paiementTypeCode.LTV); // loyaltyvoucher
+    const VCHPaiementType = paiementTypes.find((item: any) => item.internalcode === paiementTypeCode.VCH);
+    const TBLPaiementType = paiementTypes.find((item: any) => item.internalcode === paiementTypeCode.TBL);
+
+    const LTCItems = shoppingCartItems.filter((item: any) => item.productType === productType.LoyaltyCardMoney);
+    const LTCAmount = LTCItems ? LTCItems.reduce((accu: number, item: any) => accu + item.subTotalTtc, 0) : 0;
+
+    const LTVMoneyItems = shoppingCartItems.filter((item: any) => item.productType === productType.LoyaltyVoucherMoney);
+    const LTVTicketsItems = shoppingCartItems.filter((item: any) => item.productType === productType.LoyaltyVoucherTicket);
+    const VCHTicketsItems = shoppingCartItems.filter((item: any) => item.productType === productType.VoucherTicket);
+    const BASICTicketsItems = shoppingCartItems.filter((item: any) => item.productType === productType.Ticket);
+    const SuperticketItems = shoppingCartItems.filter((item: any) => item.productType === productType.Superticket);
+    const confectioneryProducts = shoppingCartItems.filter((item: any) => item.productType === productType.ConfectioneryProduct);
+    const confectioneryMenus = shoppingCartItems.filter((item: any) => item.productType === productType.ConfectioneryMenu);
+    const LoyaltyProductItems = shoppingCartItems.filter((item: any) => item.productType === productType.LoyaltyProduct);
+    const CINECHEQUEVoucherType = voucherTypes.find((item: any) => item.code === voucherTypeCode.CINECHEQUE);
+    const CINEDAYVoucherType = voucherTypes.find((item: any) => item.code === voucherTypeCode.CINEDAY);
+    const OSCVoucherTypes = voucherTypes.filter((item: any) => item.code === voucherTypeCode.OSC);
+
+    const OSCTicketsItems = VCHTicketsItems.filter((item: any) => item.voucherType === voucherTypeCode.OSC);
+    const CINEDAYTicketsItems = VCHTicketsItems.filter((item: any) => item.voucherType === voucherTypeCode.CINEDAY);
+    const CINECHEQUETicketsItems = VCHTicketsItems.filter((item: any) => item.voucherType === voucherTypeCode.CINECHEQUE);
+    const CIPTicketsItems = shoppingCartItems.filter((item: any) => item.productType === productType.CipTicket);
+    const transactionSupplement = shoppingCartItems.find((item: any) => item.productType === productType.TransactionSupplement);
+    const ticketsForCinedayCalculCount = ticketsForInvoice.filter(
+        (item: any) => item.voucherType !== voucherTypeCode.CINEDAY
+    ).reduce((accu: number, item: any) => accu + item.qty, 0);
+    const supertickets = await getCachedData(cinema, account, 'superticket');
+    const shows = await getCachedData(cinema, account, 'shows_internetlite');
+    const getBasicTicketWithCinema = getBasicTicket(cinema, tariffSupplements);
+
+    // basic tickets
+    const basicTickets = BASICTicketsItems.map((item: any) =>
+        Array.from(Array(item.qty).keys())
+            .map(i => {
+                const show = shows.find(curShow => curShow.id === item.showId);
+                return getBasicTicketWithCinema(item, show, i);
+            }))
+        .reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    // loyaltycardtickets
+    const loyaltyCardTickets = shoppingCartItems.filter((item: any) =>
+        item.productType === productType.LoyaltyCardTicket
+    ).map((item: any) =>
+        Array.from(Array(item.qty).keys()).map(i => {
+            const show = shows.find(curShow => curShow.id === item.showId);
+            const ticket = getBasicTicketWithCinema(item, show, i);
+            ticket.loyaltycardticketsid = {
+                id: item.loyaltyCardTicketIds[i]
+            };
+            return ticket;
+        })
+    ).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    // loyaltyCard preferentialTariff
+    const loyaltyCardPreferentialTariffTickets = shoppingCartItems.filter((item: any) =>
+        item.productType === productType.LoyaltyCardPreferentialTariff
+    ).map((item: any) =>
+        Array.from(Array(item.qty).keys())
+            .map(i => {
+                const show = shows.find(curShow => curShow.id === item.showId);
+                const ticket = getBasicTicketWithCinema(item, show, i);
+                ticket.familytariffloyaltycardidid = item.loyaltyCardId;
+                ticket.familytariffidid = item.tariffFamilyId;
+                return ticket;
+            })
+    ).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    // loyaltyvouchertickets
+    const loyaltyVoucherTickets = LTVTicketsItems.map((item: any) =>
+        Array.from(Array(item.qty).keys())
+
+            .map(i => {
+                const show = shows.find(curShow => curShow.id === item.showId);
+                return getBasicTicketWithCinema(item, show, i);
+            })
+            .map((el: any) => {
+                el.loyaltyvoucherid = { id: item.voucherId };
+                return el;
+            })).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    // voucherTickets
+    const voucherTickets = VCHTicketsItems.map((item: any) =>
+        Array.from(Array(item.qty).keys())
+            .map((i => {
+                const show = shows.find(curShow => curShow.id === item.showId);
+                return getBasicTicketWithCinema(item, show, i);
+            }))
+            .map((el: any) => {
+                el.voucherbarcode = item.uuidbarcode;
+                el.vouchercardid = item.uuidbarcode;
+                el.vouchertype = item.voucherType;
+                return el;
+            })).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+    // CipTickets
+    const cipTickets = CIPTicketsItems.map((item: any) =>
+        Array.from(Array(item.qty).keys())
+            .map(i => {
+                const show = shows.find(curShow => curShow.id === item.showId);
+                return getBasicTicketWithCinema(item, show, i);
+            })
+            .map((el: any) => {
+                el.voucherbarcode = item.barcode;
+                el.authorizationid = item.authNumber;
+                el.vouchertype = 'CIP';
+                return el;
+            })).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    const transactionLoyaltyproductLoyaltycardCollection = LoyaltyProductItems.map((item: any) => {
+        const loyaltyProduct = loyaltyProducts.find((lp: any) => lp.id === item.loyaltyProductId);
+        if (!loyaltyProduct) {
+            throw 'LOYALTY_PRODUCT_NOT_FOUND';
+        }
+        return Array.from(Array(item.qty).keys())
+            .map((i: number) => {
+                const val: any = {
+                    loyaltycardid: {
+                        id: item.loyaltyCardId
+                    },
+                    loyaltyproductid: {
+                        id: item.loyaltyProductId
+                    },
+                    saledate: new Date().toISOString(),
+                };
+                if (item.blankLoyaltyCard) {
+                    val.creationmanagementfees = loyaltyProduct.creationmanagementfees;
+                    val.rechargemanagementfees = 0;
+                    val.firstsale = true;
+                } else {
+                    val.rechargemanagementfees = loyaltyProduct.rechargemanagementfees;
+                    val.creationmanagementfees = 0;
+                    val.firstsale = false;
+                }
+                return val;
+            });
+    }).reduce((accu: any[], item: any[]) => accu.concat(item), [])
+        .map((item: any, i: number) => {
+            item.id = - i - 1;
+            return item;
+        });
+
+    // Supertickets
+    const superticketTickets = SuperticketItems.map((item: any) => {
+        const offer = getSuperTicketOffer(supertickets, item.superticketId, item.superTicketOfferId);
+        if (!offer) {
+            throw 'SUPERTICKET_OFFER_NOT_FOUND';
+        }
+        return Array.from(Array(item.qty).keys())
+            .map(i => {
+                const firstShowId = item.firstShowId;
+                const firstShow = getShowFromArray(
+                    shows,
+                    firstShowId
+                );
+                const allShowsOfSchedule = getShowsBySuperticketScheduleId(
+                    shows,
+                    firstShow.superticketscheduleid
+                );
+                if (allShowsOfSchedule.length !== offer.superticketofferMediaTariffCollection.length) {
+                    throw 'SUPERTICKET_SHOW_MEDIA_UNBALANCE';
+                }
+                return Array.from(Array(
+                    offer.superticketofferMediaTariffCollection.length
+                ).keys()).map((j) => {
+                    const mediaTariff = offer.superticketofferMediaTariffCollection[j];
+                    const showForTicket = allShowsOfSchedule.find((show: any) => {
+                        return show.mediaid.id === mediaTariff.mediaid.id;
+                    });
+                    if (!showForTicket) {
+                        throw 'SUPERTICKET_SHOW_NOT_FOUND';
+                    }
+                    const seatingOfShow = item.superticketSeating
+                        ? item.superticketSeating[showForTicket.id]
+                        : undefined;
+                    const seatingOfTicket = seatingOfShow ? seatingOfShow[i] : undefined;
+
+                    // let ticketsalesupplementsCollection = showForTicket
+                    //     ? tariffSupplements.filter(ts => {
+                    //         if (!ts.mediaoptionsid) {
+                    //             return false;
+                    //         }
+                    //         return showForTicket.showsMediaoptionsCollection.some(moid => moid.mediaoptionsid.id === ts.mediaoptionsid.id);
+                    //     }).map((ts, i) => ({
+                    //         id: - i - 1,
+                    //         amount: ts.price,
+                    //         tariffsupplementid: ts
+                    //     }))
+                    // : [];
+
+                    // const screenTarifSupplements = showForTicket
+                    //     ? tariffSupplements.filter(ts => {
+                    //         if (!ts.screenid) {
+                    //             return false;
+                    //         }
+                    //         return ts.screenid === showForTicket.screenid.id;
+                    //     }).map((ts, i) => ({
+                    //         id: -100 - i, // on repart à -100 pour ne pas interférer avec les suppléments de médiaoptions dans la même collection
+                    //         amount: ts.price,
+                    //         tariffsupplementid: ts
+                    //     }))
+                    // : [];
+
+                    // ticketsalesupplementsCollection = ticketsalesupplementsCollection.concat(screenTarifSupplements);
+
+                    return {
+                        tariffid: {
+                            id: mediaTariff.tariffid.id
+                        },
+                        operationdate: moment().toISOString(),
+                        cinemaid: cinema,
+                        canceled: false,
+                        // ci dessous: seatingOfticket dans le fonctionnement Cineum
+                        disabledperson: seatingOfTicket && seatingOfTicket.isDisabledPerson !== undefined
+                            ? seatingOfTicket.isDisabledPerson
+                            : item.isDisabledPerson,
+                        applyinternetsupplement: item.ticketSupplement,
+                        showid: {
+                            id: showForTicket.id
+                        },
+                        seatcol: seatingOfTicket ? seatingOfTicket.seatcol : undefined,
+                        seatnumber: seatingOfTicket ? seatingOfTicket.seatnumber : undefined,
+                        seatrow: seatingOfTicket ? seatingOfTicket.seatrow : undefined,
+                        // ticketsalesupplementsCollection
+                    };
+                });
+            }).reduce((accu: any[], it: any[]) => accu.concat(it), []);
+    }).reduce((accu: any[], it: any[]) => accu.concat(it), []);
+
+    const ticketsaleCollection = basicTickets
+        .concat(loyaltyCardTickets)
+        .concat(loyaltyCardPreferentialTariffTickets)
+        .concat(loyaltyVoucherTickets)
+        .concat(voucherTickets)
+        .concat(cipTickets)
+        .concat(superticketTickets)
+        .map((item: any, i: number) => {
+            item.id = -i - 1;
+            return item;
+        });
+
+    /*
+     * Menus de confiserie
+     */
+    const confectioneryMenuItemsInvoiceLines = confectioneryMenus.map((p: any) => {
+        return p.items.map((i: any) => ({
+            fk_product: i.rowId,
+            qty: i.qty,
+            label: i.stringLabel ? i.stringLabel.substring(0, 255) : '',
+            subprice: i.priceHt,
+            subprice_ttc: i.priceTtc,
+            tva_tx: (i.VATRateCoefficient - 1) * 100,
+            product_type: '0'
+        }));
+    }).reduce((accu: any[], item: any[]) => accu.concat(item), []);
+
+    const productsWithBarcodeInvoiceLines = ticketsForInvoiceWithBarcode.map((item: any) => {
+        return Array.from(Array(item.qty).keys()).map((_: any, i: number) => ({
+            fk_product: item.rowId,
+            qty: 1,
+            label: item.stringLabel ? item.stringLabel.substring(0, 255) : '',
+            subprice: item.priceHt,
+            subprice_ttc: item.priceTtc,
+            tva_tx: (item.VATRateCoefficient - 1) * 100,
+            product_type: '0',
+            array_options: {
+                options_barcode: `${uuidV4()}@SRV`,
+                options_barcode_status: 'new' // 'new' | 'controlled' | 'canceled'
+            }
+        }));
+    }).reduce((accu: any[], it: any[]) => accu.concat(it), []);
+
+    /*
+     * Produits de confiserie
+     */
+    const confectioneryProductsInvoiceLines = confectioneryProducts.map((p: any) => ({
+        fk_product: p.rowId,
+        qty: p.qty,
+        label: p.stringLabel ? p.stringLabel.substring(0, 255) : '',
+        subprice: p.priceHt,
+        subprice_ttc: p.priceTtc,
+        tva_tx: (p.VATRateCoefficient - 1) * 100,
+        product_type: '0'
+    }));
+    /*
+     * tickets pour l'invoice
+     */
+    const ticketsInvoiceLines = ticketsForInvoice.map((ticket: any) => {
+        /*
+         * Côté client, le supplément tariffaire de ticket est ajouté aux montants de l'item
+         * On le retranche du montant de la facture car il fera l'objet d'une ligne supplémentaire avec son propre taux de tva
+         */
+        const shouldRetrieveTicketSupplement = (ticket.internetTicketSupplement || ticket.ticketSupplement) && ticketSupplement; // si l'item a un supplément de ticket (ticket.ticketSupplement pour le superticket)
+        const newTtc = shouldRetrieveTicketSupplement ? (ticket.priceTtc - ticketSupplement.price) : ticket.priceTtc;
+        const newHt = shouldRetrieveTicketSupplement ? htFromTtc(newTtc, (ticket.VATRateCoefficient - 1) * 100) : ticket.priceHt;
+
+        const lines = [{
+            fk_product: null as any,
+            qty: ticket.qty,
+            label: ticket.stringLabel ? ticket.stringLabel.substring(0, 255) : '',
+            labelTicket: ticket.stringLabel ? ticket.stringLabel.substring(0, 255) : '',
+            subprice: newHt,
+            subprice_ttc: newTtc,
+            tva_tx: (ticket.VATRateCoefficient - 1) * 100,
+            product_type: '0'
+        }];
+        if (shouldRetrieveTicketSupplement) {
+            // on ajoute le supplément sur une ligne séparée
+            const suppPriceTtc = ticketSupplement.price;
+            const suppPriceHt = htFromTtc(suppPriceTtc, ticketSupplement.distributorshared ? currentCinema.vatrate : currentCinema.vatrateproducts);
+            lines.push({
+                fk_product: null as any,
+                qty: ticket.qty,
+                label: t('INVOICE.TICKET_SUPPLEMENT'),
+                labelTicket: t('INVOICE.TICKET_SUPPLEMENT'),
+                subprice: suppPriceHt,
+                subprice_ttc: suppPriceTtc,
+                tva_tx: ticketSupplement.distributorshared ? currentCinema.vatrate : currentCinema.vatrateproducts,
+                product_type: '0'
+            });
+        }
+        return lines;
+    }).reduce((accu, item) => accu.concat(item), []);
+
+    /*
+     * les précédents + Paiement par argent de carte de fidélité
+     */
+    const invoiceLines = productsWithBarcodeInvoiceLines.concat(
+        confectioneryMenuItemsInvoiceLines.concat(
+            confectioneryProductsInvoiceLines.concat(
+                ticketsInvoiceLines.concat(
+                    LTCItems.map((item: any) => ({
+                        fk_product: null as any,
+                        qty: 1,
+                        label: t('INVOICE.LC_MONEY_PAYMENT'),
+                        subprice: item.priceTtc,
+                        subprice_ttc: item.priceTtc,
+                        tva_tx: 0,
+                        product_type: '0'
+                    }))
+                )
+            )
+        )
+    );
+    /*
+     * PaiementCollections
+     */
+
+    // argent de carte de fidélité
+    const LTCPaiementCollection: PaiementCollectionItem[] = LTCItems.map((LTCItem: any) => ({
+        amount: Math.abs(LTCItem.subTotalTtc), // negative to positive
+        loyaltycardid: {
+            id: LTCItem.loyaltyCardId
+        },
+        paiementtypeid: LTCPaiementType
+    }));
+    // argent de bon d'achat fidélité
+    const LTVPaiementCollection: PaiementCollectionItem[] = LTVMoneyItems.map((item: any) => ({
+        amount: Math.abs(item.subTotalTtc), // negatif vers positif
+        loyaltyvoucherid: {
+            id: item.voucherId
+        },
+        paiementtypeid: LTVPaiementType
+    }));
+
+    // montant de bon d'achat CINECHEQUE
+    const CINECHEQUEPaiementCollection: PaiementCollectionItem[] = CINECHEQUETicketsItems.map((item: any) => ({
+        amount: CINECHEQUEVoucherType.tariffid.price,
+        cinemaidOfShow: cinema,
+        paiementtypeid: VCHPaiementType,
+        showid: { id: item.showId },
+        voucherbarcode: item.uuidbarcode,
+        vouchertypeid: CINECHEQUEVoucherType
+    }));
+
+    const OSCPaiementCollection: PaiementCollectionItem[] = OSCTicketsItems.map((item: any) => {
+        const voucherType = OSCVoucherTypes.find((current: any) => current.id === item.voucherTypeId);
+        if (!voucherType) {
+            throw 'OSC_VOUCHER_NOT_FOUND';
+        } else {
+            return {
+                amount: voucherType.tariffid.price,
+                cinemaidOfShow: cinema,
+                paiementtypeid: VCHPaiementType,
+                showid: { id: item.showId },
+                voucherbarcode: item.uuidbarcode,
+                vouchertypeid: voucherType
+            };
+        }
+    });
+
+    const CINEDAYPaiementCollection: PaiementCollectionItem[] = CINEDAYTicketsItems.map((item: any) => ({
+        amount: CINEDAYVoucherType.tariffid.price, // @see http://gitlab.cds.intra/caisse-vad/vad/-/issues/150
+        paiementtypeid: VCHPaiementType,
+        showid: { id: item.showId },
+        vouchertypeid: {
+            id: CINEDAYVoucherType.id,
+            voucherid: CINEDAYVoucherType,
+            price: CINEDAYVoucherType.tariffid.price,
+            codecineday: item.uuidbarcode
+        },
+        voucherbarcode: item.uuidbarcode
+    }));
+
+    const paiementCollection = ([] as PaiementCollectionItem[]).concat(LTCPaiementCollection)
+        .concat(LTVPaiementCollection)
+        .concat(CINECHEQUEPaiementCollection)
+        .concat(OSCPaiementCollection)
+        .concat(CINEDAYPaiementCollection);
+
+    // argent de carte bancaire
+    if (clientAmount > 0) {
+        paiementCollection.push({
+            amount: clientAmount,
+            paiementtypeid: CRDPaiementType
+        } as PaiementCollectionItem);
+    }
+
+    // part à facturer (tariff multiplepayers)
+    if (!TBLPaiementType) {
+        logger.warn('VAD_LOG', 'On a essayé de faire un paiement à facturer mais on a pas trouvé le paiementype');
+    }
+    if (toBillAmount > 0) {
+        paiementCollection.push({
+            amount: toBillAmount,
+            paiementtypeid: TBLPaiementType
+        } as PaiementCollectionItem);
+    }
+
+    return {
+        cinemaid: cinema,
+        transactiondate: moment().toISOString(),
+        canceled: false,
+        ticketsaleCollection,
+        transactionLoyaltyproductLoyaltycardCollection,
+        internetsupplement: transactionSupplement ? transactionSupplement.priceTtc : 0,
+        internetuuid: uuid,
+        transactionversion: 1,
+        paiementCollection: paiementCollection.map((item: any, i: number) => {
+            item.id = -i - 1;
+            return item;
+        }),
+        api_token: apiToken,
+        linesWithBarcode: productsWithBarcodeInvoiceLines, // internal
+        origin: fromAllocine ? 'allocine' : null,
+        invoice: {
+            socid: socId,
+            date: moment().unix(),
+            entity: erpentity,
+            date_commande: moment().unix(),
+            lines: invoiceLines
+        },
+    };
+};
+          </code></pre>
+				</section>
+				<section>
+					<a href="https://excalidraw.com/#json=0ym7I-J57yMG34O2PR2vi,5rzYIRqC_A8RWPHH_S3rdQ" target="_blank">🔗 Schema  d'infra</a>
+          <img src="/images/excalidraw-cineoffice.png"/>
+				</section>
+				<section>
+<h3>Sécurité</h3>
+				</section>
+				<section>
+<h3>CORS</h3>
+<pre style="font-size: 30%;"><code class="language-typescript" data-trim><script type="text/template">
+import fs from 'fs';
+import { Request, Response, NextFunction } from 'express';
+
+// Une origine par ligne, lignes vides et commentaires (#) ignorés
+const allowedOrigins = new Set(
+    fs.readFileSync(process.env.CORS_ORIGINS_FILE ?? 'allowed-origins.txt', 'utf8')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith('#'))
+);
+
+const crossOriginMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    const origin = req.headers.origin;
+
+    res.setHeader('Vary', 'Origin');
+    if (origin && allowedOrigins.has(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+        res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,content-type,Authorization,X-Requested-By,accept,lang');
+    }
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).send();
+    }
+    next();
+};
+
+export default crossOriginMiddleware;
+</script></code></pre>
+<pre style="font-size: 30%;"><code class="language-bash" data-trim>
+# Une origine par ligne (schéma + hôte + port éventuel, sans slash final)
+# Wildcard de sous-domaine : https://*.example.com
+https://*.cine.boutique
+https://leconcorde.fr
+http://localhost:3000
+</code></pre>
+				</section>
+<section>
+<h3>Balise CSP</h3>
+<pre>
+<code>
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self';
+               script-src 'self' https://*.cine.boutique https://*.hipay.com https://*.paypal.com https://mpsnare.iesnare.com https://accounts.google.com/gsi/client;
+               style-src 'self' https://*.cine.boutique https://*.hipay.com https://accounts.google.com/gsi/style;
+               img-src 'self' https://*.cine.boutique https://*.hipay.com https://*.paypalobjects.com;
+               connect-src 'self' https://*.hipay.com https://*.hipay-tpp.com https://*.paypal.com wss://mpsnare.iesnare.com https://accounts.google.com/gsi/;
+               frame-src https://*.hipay.com https://*.paypal.com https://accounts.google.com/gsi/;
+               font-src https://*.gstatic.com;">
+</code>
+</pre>
+</section>
 			</div>
 		</div>
 
