@@ -357,7 +357,7 @@ brew install nvm pnpm
 <section>
 <h3>Schema de bdd</h3>
 <p>Migrations</p>
-          <pre><code>
+          <pre style="font-size: 35%;"><code class="language-bash">
 ├── migrations
 │   ├── 20250414191243_create_users.sql
 │   ├── 20250414191431_create_one_time_codes.sql
@@ -478,7 +478,7 @@ brew install nvm pnpm
           </code></pre>
 </section>
 <section>
-          <h3 style="margin: 0; padding: 0;">Schema SQL<h3>
+          <h3 style="font-size: 70%;">Schema SQL (PostgreSQL)<h3>
           <pre style="font-size: 21%; width: 100%; height: 100ch; margin: 0; padding: 0; display: block;"><code>
 ┌────────────────────────────────────────────────────────────────────────────────────┐                            ┌──────────────────────────────────────────────────┐
 │ activity_equipment                                                                 │                            │ amenity_comment_likes                            │
@@ -1035,9 +1035,111 @@ PK primary key · FK foreign key · uniq unique · ? nullable
           </code></pre>
 </section>
 <section>
-<h3>Composants d'accès aux données </h3>
-<p>(sql)</p>
-<p>TODO</p>
+<h3 style="font-size: 70%;">Accès aux données: lister les activités</h3>
+<pre style="font-size: 25%; height: 100%; display: block;"><code class="language-rust" data-trim><script type="text/template">
+  // Get paginated list of user's track recordings
+  let recordings_result = sqlx::query_as!(
+      TrackRecording,
+      r#"SELECT id, user_id, route_id, name, track, distance_meters, duration_seconds,
+               avg_speed_kmh, max_speed_kmh, elevation_gain_meters, elevation_loss_meters,
+               started_at, ended_at, private, created_at as "created_at!", updated_at as "updated_at!",
+               deleted_at, uuid as "uuid!", ai_analysis, transport_mode, strava_id, strava_leaderboard_consent,
+               description, garmin_activity_id, polar_exercise_id
+       FROM track_recordings
+       WHERE user_id = $1
+         AND deleted_at IS NULL
+         AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%')
+         AND ($3::float8 IS NULL OR distance_meters >= $3)
+         AND ($4::float8 IS NULL OR distance_meters <= $4)
+         AND ($5::int4 IS NULL OR duration_seconds >= $5)
+         AND ($6::int4 IS NULL OR duration_seconds <= $6)
+         AND ($9::text IS NULL OR transport_mode = $9)
+         AND ($10::bool IS NULL OR private = $10)
+       ORDER BY started_at DESC
+       LIMIT $7 OFFSET $8"#,
+    )
+}
+</script></code></pre>
+</section>
+<section>
+<h3 style="font-size: 70%;">Accès aux données: enregistrer une activité</h3>
+<pre style="font-size: 35%;"><code class="language-rust" data-trim><script type="text/template">
+    // Insert track recording into database
+    let saved_recording = sqlx::query_as!(
+        TrackRecording,
+        r#"INSERT INTO track_recordings
+        (user_id, route_id, name, track, distance_meters, duration_seconds,
+         avg_speed_kmh, max_speed_kmh, elevation_gain_meters, elevation_loss_meters,
+         started_at, ended_at, created_at, updated_at, ai_analysis, transport_mode, private)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        RETURNING id, user_id, route_id, name, track, distance_meters, duration_seconds,
+                  avg_speed_kmh, max_speed_kmh, elevation_gain_meters, elevation_loss_meters,
+                  started_at, ended_at, private, created_at as "created_at!", updated_at as "updated_at!",
+                  deleted_at, uuid as "uuid!", ai_analysis, transport_mode, strava_id, strava_leaderboard_consent,
+                  description, garmin_activity_id, polar_exercise_id"
+    )
+</script></code></pre>
+</section>
+<section>
+<h3 style="font-size: 70%;">Accès aux données: routes à proximité</h3>
+<pre style="font-size: 35%;"><code class="language-sql">
+-- C’est une recherche « autour de moi ». Elle renvoie les routes visibles par l’utilisateur dont le point de départ se trouve à moins de $3 km d’un point donné,
+-- de la plus proche à la plus lointaine, avec les photos associées.
+
+WITH route_positions AS (
+    SELECT sr.*, g.geom AS start_geom
+    FROM saved_routes sr
+    JOIN saved_route_start_geoms g ON g.route_id = sr.id
+    JOIN users owner ON owner.id = sr.user_id
+    WHERE sr.private = false
+    AND sr.deleted_at IS NULL
+    AND (
+        sr.user_id = $5
+        OR owner.routes_visibility = 'public'
+        OR (owner.routes_visibility = 'followers' AND EXISTS (
+            SELECT 1 FROM user_follows f
+            WHERE f.follower_id = $5 AND f.followed_id = sr.user_id AND f.status = 'accepted'
+        ))
+    )
+),
+route_photos AS (
+    SELECT
+        tr.route_id,
+        COALESCE(
+            json_agg(
+                json_build_object(
+                    'photo_url', trp.photo_url,
+                    'uuid', trp.uuid::text,
+                    'lat', trp.lat,
+                    'lng', trp.lng,
+                    'caption', trp.caption
+                ) ORDER BY trp.created_at DESC
+            ) FILTER (WHERE trp.id IS NOT NULL),
+            '[]'::json
+        ) AS photos
+    FROM track_recordings tr
+    JOIN track_recording_photos trp ON trp.track_recording_id = tr.id
+    WHERE tr.private = false
+    AND tr.deleted_at IS NULL
+    AND tr.route_id IS NOT NULL
+    GROUP BY tr.route_id
+)
+SELECT
+    rp.id, rp.user_id, rp.name, rp.route,
+    rp.created_at, rp.updated_at, rp.deleted_at, rp.uuid,
+    rp.private, rp.ai_analysis, rp.forked_from_id,
+    ST_Distance(rp.start_geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography) / 1000.0 AS distance_km,
+    COALESCE(u.nickname, u.name) AS user_name,
+    u.profile_picture_url AS user_profile_picture_url,
+    COALESCE(ph.photos, '[]'::json) AS photos,
+    (SELECT COUNT(*) FROM saved_routes fk WHERE fk.forked_from_id = rp.id AND fk.deleted_at IS NULL) AS fork_count
+FROM route_positions rp
+LEFT JOIN users u ON u.id = rp.user_id
+LEFT JOIN route_photos ph ON ph.route_id = rp.id
+WHERE ST_DWithin(rp.start_geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3 * 1000) --garde les départs situés dans le rayon
+ORDER BY distance_km ASC
+LIMIT $4
+  </code></pre>
 </section>
 <section>
 <h3>Tests</h3>
