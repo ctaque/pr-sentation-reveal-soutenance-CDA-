@@ -836,6 +836,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 rustup component add clippy # Rust linter
 rustup component add rust-analyzer # Rust LSP
+rustup component add rustfmt # Rust code formatter
+cargo binstall cargo-watch # file watch
 </code></pre>
 </section>
 <section>
@@ -1080,6 +1082,9 @@ jobs:
 </script></code></pre>
 </section>
 <section>
+
+</section>
+<section>
 <h3>Dockerfile</h3>
 <pre style="font-size: 35%;"><code class="language-dockerfile" data-trim><script type="text/template">
 # ─── Stage 1: Cargo chef – compute dependency recipe ─────────────────────────
@@ -1146,7 +1151,7 @@ CMD ["./server"]
 </script></code></pre>
 </section>
 <section>
-<h3>Déploiement sur un serveur avec Nomad</h3>
+<h3>Déploiement Blue/Green sur un serveur avec Nomad</h3>
 <pre style="font-size: 30%"><code class="terraform">
 variable "image_tag" {
   type    = string
