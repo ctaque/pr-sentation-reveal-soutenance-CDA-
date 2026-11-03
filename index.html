@@ -19,8 +19,196 @@
 	<body>
 		<div class="reveal">
 			<div class="slides">
-				<section>Slide 1</section>
-				<section>Slide 2</section>
+				<section>
+					<h3>
+            Environnement dev
+          </h3>
+          <p style="display:flex; justify-content: center; align-items:center; gap: 1rem;" >
+            <img src="/images/nvim.webp" width="50" style="background: transparent;"/>
+            Neovim : LSP, Prettier, Tree-sitter, NeoGit
+          </p>
+          <p>Ou</p>
+          <p style="display:flex; justify-content: center; align-items:center; gap: 1rem;" >
+            <img src="/images/vscode.png" width="50"/>
+            VSCode
+          </p>
+				</section>
+				<section>
+					<p>Environnement de dev</p>
+					<p>Docker-compose.yml</p>
+<pre style="font-size: 35%;"><code class="language-yaml" data-trim><script type="text/template">
+x-mautic-volumes: &mautic-volumes
+  - mautic_config:/var/www/html/config:z
+  - mautic_logs:/var/www/html/var/logs:z
+  - mautic_media_files:/var/www/html/docroot/media/files:z
+  - mautic_media_images:/var/www/html/docroot/media/images:z
+  - mautic_cron:/opt/mautic/cron:z
+
+x-mautic-env: &mautic-env
+  MAUTIC_DB_HOST: mysql
+  MAUTIC_DB_PORT: 3306
+  MAUTIC_DB_DATABASE: ${MYSQL_DATABASE}
+  MAUTIC_DB_USER: ${MYSQL_USER}
+  MAUTIC_DB_PASSWORD: ${MYSQL_PASSWORD}
+  MAUTIC_MESSENGER_DSN_EMAIL: doctrine://default
+  MAUTIC_MESSENGER_DSN_HIT: doctrine://default
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - backend
+
+  mongodb:
+    image: mongo:8.0
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    volumes:
+      - mongo_data:/data/db
+      - mongo_config:/data/configdb
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - backend
+
+  mautic_web:
+    image: mautic/mautic:${MAUTIC_VERSION:-7-apache}
+    container_name: mautic_web
+    restart: unless-stopped
+    ports:
+      - "${MAUTIC_PORT:-8080}:80"
+    volumes: *mautic-volumes
+    environment:
+      <<: *mautic-env
+      DOCKER_MAUTIC_ROLE: mautic_web
+      DOCKER_MAUTIC_RUN_MIGRATIONS: "true"
+      DOCKER_MAUTIC_LOAD_TEST_DATA: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    networks:
+      - backend
+
+  mautic_cron:
+    image: mautic/mautic:${MAUTIC_VERSION:-7-apache}
+    container_name: mautic_cron
+    restart: unless-stopped
+    volumes: *mautic-volumes
+    environment:
+      <<: *mautic-env
+      DOCKER_MAUTIC_ROLE: mautic_cron
+    depends_on:
+      mautic_web:
+        condition: service_healthy
+    networks:
+      - backend
+
+  mautic_worker:
+    image: mautic/mautic:${MAUTIC_VERSION:-7-apache}
+    container_name: mautic_worker
+    restart: unless-stopped
+    volumes: *mautic-volumes
+    environment:
+      <<: *mautic-env
+      DOCKER_MAUTIC_ROLE: mautic_worker
+      DOCKER_MAUTIC_WORKERS_CONSUME_EMAIL: 2
+      DOCKER_MAUTIC_WORKERS_CONSUME_HIT: 2
+    depends_on:
+      mautic_web:
+        condition: service_healthy
+    networks:
+      - backend
+
+volumes:
+  mysql_data:
+  mongo_data:
+  mongo_config:
+  mautic_config:
+  mautic_logs:
+  mautic_media_files:
+  mautic_media_images:
+  mautic_cron:
+
+networks:
+  backend:
+
+
+# .env
+# MySQL (utilisé par Mautic)
+MYSQL_ROOT_PASSWORD=change_me_root
+MYSQL_DATABASE=mautic
+MYSQL_USER=mautic
+MYSQL_PASSWORD=change_me_mautic
+ 
+# MongoDB
+MONGO_ROOT_USER=admin
+MONGO_ROOT_PASSWORD=change_me_mongo
+MONGO_DATABASE=app
+ 
+# Mautic
+MAUTIC_VERSION=7-apache
+MAUTIC_PORT=8080
+</script></code></pre>
+				</section>
+				<section>
+          <h3>UI: Home page Cine-Boutique</h3>
+          <img src="/images/home-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>UI: Ecran programme des séances Cine-Boutique</h3>
+          <img src="/images/schedule-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>UI: Ecran tarifs Cine-Boutique</h3>
+          <img src="/images/tarifs-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>UI: Ecran panier Cine-Boutique</h3>
+          <img src="/images/panier-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>UI: Ecran paiement Cine-Boutique</h3>
+          <img src="/images/paiement-vad.png" width="800" />
+				</section>
+				<section>
+					<a href="https://excalidraw.com/#json=12RowvmGLyd1isIfxjFpq,1hoJoEKoSuMWT_wmXi09bw" target="_blank">🔗 Schema  d'infra</a>
+				</section>
 			</div>
 		</div>
 
