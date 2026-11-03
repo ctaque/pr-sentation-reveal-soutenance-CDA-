@@ -24,8 +24,7 @@
           <p>Cyprien Taque, développeur full stack avec 7 ans d'expérience, issue d'une reversion réussie de l'industrie.</p>
 				</section>
 				<section>
-          <h3>Premier projet</h3>
-          <h3>La Billetterie Cine.Boutique</h3>
+          <h3>Projet Cine.Boutique, Billetterie de cinéma</h3>
           <br/>
           <p>https://nantesleconcorde.cine.boutique</p>
           <p>https://fougeresleclub.cine.boutique</p>
@@ -788,8 +787,7 @@ http://localhost:3000
 				</section>
 <section>
 <h3>Balise CSP</h3>
-<pre>
-<code>
+<pre style="font-size: 40%;"><code class="language-html" data-trim><script type="text/template">
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'self';
                script-src 'self' https://*.cine.boutique https://*.hipay.com https://*.paypal.com https://mpsnare.iesnare.com https://accounts.google.com/gsi/client;
@@ -798,8 +796,7 @@ http://localhost:3000
                connect-src 'self' https://*.hipay.com https://*.hipay-tpp.com https://*.paypal.com wss://mpsnare.iesnare.com https://accounts.google.com/gsi/;
                frame-src https://*.hipay.com https://*.paypal.com https://accounts.google.com/gsi/;
                font-src https://*.gstatic.com;">
-</code>
-</pre>
+</script></code></pre>
 </section>
 <section>
 <h3>Cookie d'authentification: httpOnly</h3>
@@ -808,9 +805,8 @@ http://localhost:3000
 <h3>Audit de sécurité IA</h3>
 </section>
 <section>
-<h3>Deuxième projet</h3>
-<p>FastAndFar.app</p>
-<p>Une plateforme pour planifier, enregistrer et partager des activité sportives en plein air.</p>
+<h3>Projet FastAndFar.app</h3>
+<p>Une plateforme pour planifier, enregistrer et partager des activités sportives en plein air.</p>
 </section>
 <section>
 <h3>Contexte</h3>
@@ -833,9 +829,18 @@ http://localhost:3000
 <img src="/images/faf4.png" width="300" />
 </section>
 <section>
-<h3>CI/CD Github Actions</h3>
-<pre style="font-size: 30%">
-<code>
+<h3>Installation de l'environnement de dev</h3>
+<p>Rust</p>
+<pre><code class="language-bash">
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+rustup component add clippy # Rust linter
+rustup component add rust-analyzer # Rust LSP
+</code></pre>
+</section>
+<section>
+<h3>CI/CD : tests automatisés et déploiement sur Github Actions</h3>
+<pre style="font-size: 30%;"><code class="language-yaml" data-trim><script type="text/template">
 name: Build & Push Docker Image
 
 on:
@@ -1072,6 +1077,220 @@ jobs:
         run: |
           GIT_SHA=${GITHUB_SHA::7}
           timeout 2h ssh nomad-server "NOMAD_TOKEN='$NOMAD_TOKEN' nomad job run -var='image_tag=${GIT_SHA}' -var='docker_username=${DOCKER_USERNAME}' -var='docker_password=${DOCKER_PASSWORD}' /tmp/fastandfar.nomad.hcl"
+</script></code></pre>
+</section>
+<section>
+<h3>Dockerfile</h3>
+<pre style="font-size: 35%;"><code class="language-dockerfile" data-trim><script type="text/template">
+# ─── Stage 1: Cargo chef – compute dependency recipe ─────────────────────────
+FROM rust:1.95-slim AS chef
+RUN cargo install --locked cargo-chef
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ─── Stage 3: Build Rust binary ───────────────────────────────────────────────
+FROM chef AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY . .
+RUN cargo build --release
+
+# ─── Modèle fastembed (couche indépendante du code → cachée entre builds) ────
+# Layout du cache hf-hub : refs/main → hash, snapshots/<hash>/<fichier>.
+# S'il est présent, fastembed ne fait aucun appel réseau.
+FROM debian:trixie-slim AS model
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG E5_REV=614241f622f53c4eeff9890bdc4f31cfecc418b3
+RUN set -eu; \
+    d=/models/models--intfloat--multilingual-e5-small; s="$d/snapshots/$E5_REV"; \
+    mkdir -p "$s/onnx" "$d/refs"; \
+    printf %s "$E5_REV" > "$d/refs/main"; \
+    for f in onnx/model.onnx tokenizer.json config.json special_tokens_map.json tokenizer_config.json; do \
+      curl -fsSL -o "$s/$f" "https://huggingface.co/intfloat/multilingual-e5-small/resolve/$E5_REV/$f"; \
+    done
+
+# ─── Stage 4: Runtime ────────────────────────────────────────────────────────
+FROM debian:trixie-slim AS runtime
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 curl \
+    python3 \
+    && uv pip install --system --break-system-packages garminconnect \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /app/target/release/actix_sqlx_template ./server
+COPY scripts/garmin_fetch.py ./scripts/
+COPY --from=model /models ./models
+
+ENV FASTEMBED_CACHE_DIR=/app/models
+ENV HOST=0.0.0.0
+ENV HTTP_PORT=8080
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["./server"]
+</script></code></pre>
+</section>
+<section>
+<h3>Déploiement sur un serveur avec Nomad</h3>
+<pre style="font-size: 30%"><code class="terraform">
+variable "image_tag" {
+  type    = string
+  default = "latest"
+}
+
+variable "docker_username" {
+  type = string
+}
+
+variable "docker_password" {
+  type = string
+}
+
+job "fastandfar" {
+  datacenters = ["dc1"]
+  type        = "service"
+
+  update {
+    healthy_deadline = "2h"
+    progress_deadline = "2h30m"
+  }
+
+  group "app" {
+    count = 2
+
+    constraint {
+      attribute = "${attr.consul.version}"
+      operator  = "semver"
+      value     = ">= 1.8.0"
+    }
+
+    network {
+      mode = "host"
+      port "http" {
+        to = 8090
+      }
+    }
+
+    migrate {
+      max_parallel     = 1
+      health_check     = "checks"
+      min_healthy_time = "2h"
+      healthy_deadline = "2h30m"
+    }
+
+    reschedule {
+      delay          = "30s"
+      delay_function = "exponential"
+      max_delay      = "1h"
+      unlimited      = true
+    }
+
+    restart {
+      attempts = 2
+      delay    = "15s"
+      interval = "1800s"
+      mode     = "fail"
+    }
+
+    update {
+      max_parallel      = 2
+      canary            = 2
+      auto_promote      = true
+      auto_revert       = true
+      health_check      = "checks"
+      min_healthy_time  = "30s"
+      healthy_deadline  = "2h"
+      progress_deadline = "2h30m"
+      stagger           = "30s"
+    }
+
+    service {
+      name         = "fastandfar"
+      port         = "http"
+      provider     = "consul"
+      on_update    = "require_healthy"
+
+      check {
+        type     = "http"
+        path     = "/health"
+        interval = "10s"
+        timeout  = "2s"
+      }
+    }
+
+    task "server" {
+      driver = "docker"
+
+      config {
+        image = "docker-hub.fastandfar.app/ctaque/fastandfar:${var.image_tag}"
+        ports = ["http"]
+
+        auth {
+          username = var.docker_username
+          password = var.docker_password
+        }
+      }
+
+      env {
+        NODE_ENV  = "production"
+        RUST_LOG  = "info"
+        HOST      = "0.0.0.0"
+        HTTP_PORT = "${NOMAD_PORT_http}"
+      }
+
+      resources {
+        cpu    = 500
+        memory = 2048
+      }
+
+      template {
+        destination = "secrets/app.env"
+        env         = true
+        change_mode = "restart"
+        perms       = "0644"
+        splay       = "5s"
+
+        data = <<EOT
+{{- with nomadVar "nomad/jobs/fastandfar" }}
+{{- range $k, $v := . }}
+{{ $k }}={{ $v }}
+{{- end }}
+APNS_KEY_PEM={{ .APNS_KEY_PEM.Value | base64Decode | toJSON }}
+FIREBASE_SERVICE_ACCOUNT_JSON={{ .FIREBASE_SERVICE_ACCOUNT_JSON.Value | base64Decode | toJSON }}
+STORE_JWT_PRIVATE_KEY={{ .STORE_JWT_PRIVATE_KEY.Value | base64Decode | toJSON }}
+STORE_JWT_PUBLIC_KEY={{ .STORE_JWT_PUBLIC_KEY.Value | base64Decode | toJSON }}
+{{- /* Base osm2pgsql (communes traversées des descriptions d'itinéraires) : même serveur et mêmes identifiants que l'app, base "gis". */}}
+{{- with index . "DATABASE_URL" }}
+GIS_DATABASE_URL={{ .Value | regexReplaceAll "/[^/?]+([?].*)?$" "/gis$${1}" }}
+{{- end }}
+{{- end }}
+{{- range service "redis" }}
+REDIS_URL=redis://:{{ with nomadVar "nomad/jobs/fastandfar" }}{{ .REDIS_PASSWORD.Value }}{{ end }}@{{ .Address }}:{{ .Port }}
+{{- end }}
+{{- /* BRouter auto-hébergé (brouter.nomad.hcl), seulement une fois sain ; sinon l'app reste sur l'API ORS publique. */}}
+{{- range service "brouter" }}
+BROUTER_URL=http://{{ .Address }}:{{ .Port }}
+{{- end }}
+EOT
+      }
+    }
+  }
+}
 </code></pre>
 </section>
 			</div>
