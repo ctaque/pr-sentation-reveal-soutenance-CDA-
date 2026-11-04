@@ -314,7 +314,7 @@ db.collection.aggregate([
 				</section>
 <section>
   <h3>Node.js Best practices</h3>
-  <a href="https://github.com/goldbergyoni/nodebestpractice">https://github.com/goldbergyoni/nodebestpractice</a>
+  <a href="https://github.com/goldbergyoni/nodebestpractices">https://github.com/goldbergyoni/nodebestpractices</a>
   <p>Scanner les dépendances avec un outil comme dépendabot</p>
 </section>
 				<section>
@@ -542,7 +542,7 @@ brew install nvm pnpm
           </code></pre>
 </section>
 <section>
-          <h3 style="font-size: 70%;">Schema SQL (PostgreSQL)<h3>
+          <h3 style="font-size: 70%;">Schema SQL (PostgreSQL)</h3>
           <pre style="font-size: 21%; width: 100%; height: 100ch; margin: 0; padding: 0; display: block;"><code>
 ┌────────────────────────────────────────────────────────────────────────────────────┐                            ┌──────────────────────────────────────────────────┐
 │ activity_equipment                                                                 │                            │ amenity_comment_likes                            │
@@ -1488,7 +1488,7 @@ jobs:
           echo "${{ secrets.DO_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          cat > ~/.ssh/config << EOF
+          cat > ~/.ssh/config &lt;&lt; EOF
           Host nomad-server
             HostName ${{ secrets.DROPLET_IP }}
             User root
