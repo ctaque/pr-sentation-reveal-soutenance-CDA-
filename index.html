@@ -249,9 +249,59 @@ MAUTIC_PORT=8080
           <ul style="font-size: 70%; text-align: left; align-self: flex start;"><li>Transformation du panier</li><li>requête de paiement, Server Sent Notifications/webhook</li><li>transaction java</li></ul>
           <img src="images/transaction.png" />
 				</section>
+<section>
+  <h3>Composants d'accès aux données: MongoDB pipelines: collection</h3>
+  <pre style="font-size: 30%">
+ <code class="language-javascript">
+// Document exemple
+{
+  name: "Festival Nantes",
+  entities: [
+    { kind: "person", name: "Jeanne Dupont" },
+    { kind: "media",  title: "Bande-annonce", mediaType: "video", language: "fr", durationSec: 142 },
+    { kind: "media",  title: "Affiche",       mediaType: "image" }
+  ]
+}
+    </code>
+  </pre>
+  </section>
+  <section>
+  <h3>Composants d'accès aux données: MongoDB pipelines: pipeline</h3>
+    <pre style="font-size: 40%;">
+      <code>
+db.collection.aggregate([
+  // 1. Éclater le tableau : un document par entité
+  { $unwind: "$entities" },
+
+  // 2. Garder uniquement les médias qui correspondent aux critères
+  {
+    $match: {
+      "entities.kind": "media",
+      "entities.mediaType": "video",
+      "entities.language": "fr",
+      "entities.durationSec": { $gt: 60 }
+    }
+  },
+
+  // 3. Choisir les champs à renvoyer
+  {
+    $project: {
+      _id: 0,
+      projet: "$name",
+      titre: "$entities.title",
+      duree: "$entities.durationSec"
+    }
+  }
+])
+    </code></pre>
+</section>
 				<section>
 					<a href="https://excalidraw.com/#json=0ym7I-J57yMG34O2PR2vi,5rzYIRqC_A8RWPHH_S3rdQ" target="_blank">🔗 Schema  d'infra</a>
           <img src="images/excalidraw-cineoffice.png"/>
+				</section>
+				<section>
+          <h3>Contribuer à la gestion d'un projet informatique</h3>
+          <img src="images/gitlab.png" width="500" />
 				</section>
 				<section>
 <h3>Sécurité</h3>
