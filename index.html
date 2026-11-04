@@ -1142,13 +1142,75 @@ LIMIT $4
   </code></pre>
 </section>
 <section>
-<h3>Tests</h3>
-<p>Automatisés ou non</p>
-<p>TODO</p>
+<h3>Tests automatisés et déploiement via github actions: Dockerfile</h3>
+<pre style="font-size: 35%;"><code class="language-dockerfile" data-trim><script type="text/template">
+# ─── Stage 1: Cargo chef – compute dependency recipe ─────────────────────────
+FROM rust:1.95-slim AS chef
+RUN cargo install --locked cargo-chef
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ─── Stage 3: Build Rust binary ───────────────────────────────────────────────
+FROM chef AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config libssl-dev g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+COPY . .
+RUN cargo build --release
+
+# ─── Modèle fastembed (couche indépendante du code → cachée entre builds) ────
+# Layout du cache hf-hub : refs/main → hash, snapshots/<hash>/<fichier>.
+# S'il est présent, fastembed ne fait aucun appel réseau.
+FROM debian:trixie-slim AS model
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG E5_REV=614241f622f53c4eeff9890bdc4f31cfecc418b3
+RUN set -eu; \
+    d=/models/models--intfloat--multilingual-e5-small; s="$d/snapshots/$E5_REV"; \
+    mkdir -p "$s/onnx" "$d/refs"; \
+    printf %s "$E5_REV" > "$d/refs/main"; \
+    for f in onnx/model.onnx tokenizer.json config.json special_tokens_map.json tokenizer_config.json; do \
+      curl -fsSL -o "$s/$f" "https://huggingface.co/intfloat/multilingual-e5-small/resolve/$E5_REV/$f"; \
+    done
+
+# ─── Stage 4: Runtime ────────────────────────────────────────────────────────
+FROM debian:trixie-slim AS runtime
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 curl \
+    python3 \
+    && uv pip install --system --break-system-packages garminconnect \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY --from=builder /app/target/release/actix_sqlx_template ./server
+COPY scripts/garmin_fetch.py ./scripts/
+COPY --from=model /models ./models
+
+ENV FASTEMBED_CACHE_DIR=/app/models
+ENV HOST=0.0.0.0
+ENV HTTP_PORT=8080
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+CMD ["./server"]
+</script></code></pre>
 </section>
 <section>
-<h3>CI/CD : tests automatisés et déploiement sur Github Actions</h3>
-<pre style="font-size: 30%;"><code class="language-yaml" data-trim><script type="text/template">
+<h3>Tests Automatisés et déloiement via github actions: workflow.yml</h3>
+<div style="display: flex; gap: 1rem;">
+<pre style="font-size: 30%; flex:1; width: 50%;"><code class="language-yaml">
 name: Build & Push Docker Image
 
 on:
@@ -1385,73 +1447,75 @@ jobs:
         run: |
           GIT_SHA=${GITHUB_SHA::7}
           timeout 2h ssh nomad-server "NOMAD_TOKEN='$NOMAD_TOKEN' nomad job run -var='image_tag=${GIT_SHA}' -var='docker_username=${DOCKER_USERNAME}' -var='docker_password=${DOCKER_PASSWORD}' /tmp/fastandfar.nomad.hcl"
-</script></code></pre>
-</section>
-<section>
-<h3>Dockerfile</h3>
-<pre style="font-size: 35%;"><code class="language-dockerfile" data-trim><script type="text/template">
-# ─── Stage 1: Cargo chef – compute dependency recipe ─────────────────────────
-FROM rust:1.95-slim AS chef
-RUN cargo install --locked cargo-chef
-WORKDIR /app
+</code></pre>
+<pre style="font-size: 20%; flex:1; width: 50%;"><code class="language-bash">
+Run cargo test --features integration
+   Compiling actix_sqlx_template v0.2.0 (/home/runner/work/fastandfar.app/fastandfar.app)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 56.88s
+warning: the following packages contain code that will be rejected by a future version of Rust: quick-xml v0.19.0, redis v0.25.4
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/mnt/target/debug/deps/actix_sqlx_template-24c4366cd6a2550b)
 
-FROM chef AS planner
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+running 55 tests
+test routes::geo::tests::converts_photon_address_to_nominatim_shape ... ok
+test routes::geo::tests::skips_repeated_parts ... ok
+test routes::geo::tests::trims_nominatim_result ... ok
+test services::route_description::tests::describes_loop_with_all_facts ... ok
+test services::route_description::tests::gpx_import_without_routing_data ... ok
+test tests::integration_tests::test_bearer_expire_retourne_401 ... ok
+test tests::integration_tests::test_get_recording_bearer_avec_scope_activities_read ... ok
+test tests::integration_tests::test_get_recording_bearer_sans_scope_activities_read ... ok
+test tests::integration_tests::test_get_recordings_bearer_avec_scope_activities_read ... ok
+test tests::integration_tests::test_get_recordings_bearer_sans_scope_activities_read ... ok
+test tests::integration_tests::test_get_recordings_cookie_non_bloque_par_scope ... ok
+test tests::integration_tests::test_get_route_bearer_avec_scope_routes_read ... ok
+test tests::integration_tests::test_get_route_bearer_sans_scope_routes_read ... ok
+test tests::integration_tests::test_get_routes_bearer_avec_scope_routes_read ... ok
+test tests::integration_tests::test_get_routes_bearer_sans_scope_routes_read ... ok
+test tests::integration_tests::test_health_corps_alive ... ok
+test tests::integration_tests::test_health_retourne_200 ... ok
+test tests::integration_tests::test_login_code_invalide_retourne_403 ... ok
+test tests::integration_tests::test_me_sans_auth_retourne_401 ... ok
+test tests::integration_tests::test_get_routes_cookie_non_bloque_par_scope ... ok
+test tests::integration_tests::test_put_me_sans_auth_retourne_401 ... ok
+test tests::integration_tests::test_put_me_avec_auth_met_a_jour_le_nom ... ok
+test tests::integration_tests::test_recording_inexistant_retourne_404 ... ok
+test utils::brouter::tests::geojson_has_the_fields_clients_decode ... ok
+test utils::brouter::tests::json_format_encodes_a_polyline ... ok
+test utils::brouter::tests::maps_osm_tags_to_ors_ids ... ok
+test utils::brouter::tests::polyline_matches_reference_encoding ... ok
+test utils::fit_parser::tests::test_haversine_distance ... ok
+test utils::gpx::tests::test_calculate_bounds ... ok
+test utils::gpx::tests::test_format_duration ... ok
+test utils::gpx::tests::test_generate_gpx_invalid_geojson ... ok
+test utils::gpx::tests::test_generate_gpx_simple ... ok
+test utils::gpx::tests::test_generate_gpx_special_characters ... ok
+test utils::gpx::tests::test_generate_gpx_with_elevation_legacy ... ok
+test utils::gpx::tests::test_generate_gpx_with_heart_rate_power_cadence ... ok
+test utils::gpx_parser::tests::test_calculate_distance_and_duration ... ok
+test utils::gpx_parser::tests::test_gpx_to_geojson ... ok
+test utils::gpx_parser::tests::test_gpx_with_single_point ... ok
+test utils::gpx_parser::tests::test_gpx_without_elevation ... ok
+test utils::gpx_parser::tests::test_haversine_distance ... ok
+test utils::gpx_parser::tests::test_parse_invalid_gpx ... ok
+test utils::gpx_parser::tests::test_parse_valid_gpx ... ok
+test tests::integration_tests::test_put_me_sans_nickname_efface_le_champ ... ok
+test utils::image_processor::tests::test_resize_landscape ... ok
+test utils::image_processor::tests::test_resize_small_image ... ok
+test utils::mail::tests::every_template_has_an_english_translation_with_the_same_placeholders ... ok
+test utils::mail::tests::lang_from_code_defaults_to_english ... ok
+test utils::opendap_parser::tests::test_extract_numbers ... ok
+test utils::opendap_parser::tests::test_extract_numbers_from_indexed_line ... ok
+test utils::s3::tests::test_extract_key_from_url ... ok
+test utils::track_processor::tests::test_calculate_track_stats ... ok
+test utils::track_processor::tests::test_calculate_track_stats_insufficient_points ... ok
+test utils::track_processor::tests::test_haversine_distance ... ok
+test utils::track_processor::tests::test_track_points_to_geojson ... ok
+test utils::image_processor::tests::test_resize_portrait ... ok
 
-# ─── Stage 3: Build Rust binary ───────────────────────────────────────────────
-FROM chef AS builder
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    pkg-config libssl-dev g++ \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
-
-COPY . .
-RUN cargo build --release
-
-# ─── Modèle fastembed (couche indépendante du code → cachée entre builds) ────
-# Layout du cache hf-hub : refs/main → hash, snapshots/<hash>/<fichier>.
-# S'il est présent, fastembed ne fait aucun appel réseau.
-FROM debian:trixie-slim AS model
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-ARG E5_REV=614241f622f53c4eeff9890bdc4f31cfecc418b3
-RUN set -eu; \
-    d=/models/models--intfloat--multilingual-e5-small; s="$d/snapshots/$E5_REV"; \
-    mkdir -p "$s/onnx" "$d/refs"; \
-    printf %s "$E5_REV" > "$d/refs/main"; \
-    for f in onnx/model.onnx tokenizer.json config.json special_tokens_map.json tokenizer_config.json; do \
-      curl -fsSL -o "$s/$f" "https://huggingface.co/intfloat/multilingual-e5-small/resolve/$E5_REV/$f"; \
-    done
-
-# ─── Stage 4: Runtime ────────────────────────────────────────────────────────
-FROM debian:trixie-slim AS runtime
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates libssl3 curl \
-    python3 \
-    && uv pip install --system --break-system-packages garminconnect \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-COPY --from=builder /app/target/release/actix_sqlx_template ./server
-COPY scripts/garmin_fetch.py ./scripts/
-COPY --from=model /models ./models
-
-ENV FASTEMBED_CACHE_DIR=/app/models
-ENV HOST=0.0.0.0
-ENV HTTP_PORT=8080
-
-EXPOSE 8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-CMD ["./server"]
-</script></code></pre>
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.16s
+</code></pre>
+</div>
 </section>
 <section>
 <h3>Déploiement Blue/Green sur un serveur équipé de Nomad</h3>
