@@ -62,15 +62,16 @@
 <pre>
     <code class="language-bash">
   $ brew install --cask visual-studio-code
-  $ brew install code nvm pnpm git
+  $ brew install nvm pnpm git
 
 </code>
 </pre>
 				</section>
 				<section>
 					<p>Environnement de dev</p>
-					<p>Docker-compose.yml</p>
-<pre style="font-size: 35%;"><code class="language-yaml" data-trim><script type="text/template">
+					<span style="float:left; font-size: 50%;">Docker-compose.yml</span>
+  <div style="clear: both;"></div>
+<pre style="font-size: 35%; float: left;"><code class="language-yaml" data-trim><script type="text/template">
 x-mautic-volumes: &mautic-volumes
   - mautic_config:/var/www/html/config:z
   - mautic_logs:/var/www/html/var/logs:z
