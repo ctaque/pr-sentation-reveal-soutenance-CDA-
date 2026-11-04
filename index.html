@@ -39,6 +39,45 @@
           <p>Réduction des coûts</p>
 				</section>
 				<section>
+          <h3>Interfaces utilisateur</h3>
+          <h4>Cine.boutique</h4>
+        </section>
+				<section>
+          <h3>Ecran Home page</h3>
+          <img src="images/home-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>Programme des séances</h3>
+          <img src="images/schedule-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>tarifs</h3>
+          <img src="images/tarifs-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>panier</h3>
+          <img src="images/panier-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>paiement</h3>
+          <img src="images/paiement-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>Réservations</h3>
+          <img src="images/réservations-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>E-Billet</h3>
+          <img src="images/billet-vad.png" width="800" />
+				</section>
+				<section>
+          <h3>Responsive design</h3>
+          <img src="images/responsive1.png" width="200" />
+          <img src="images/responsive2.png" width="200" />
+          <img src="images/responsive3.png" width="200" />
+          <img src="images/responsive4.png" width="200" />
+				</section>
+				<section>
 					<h3>
             Environnement dev
           </h3>
@@ -222,45 +261,6 @@ MAUTIC_PORT=8080
 </script></code></pre>
 				</section>
 				<section>
-          <h3>Interfaces utilisateur</h3>
-          <h4>Cine.boutique</h4>
-        </section>
-				<section>
-          <h3>Ecran Home page</h3>
-          <img src="images/home-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>Programme des séances</h3>
-          <img src="images/schedule-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>tarifs</h3>
-          <img src="images/tarifs-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>panier</h3>
-          <img src="images/panier-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>paiement</h3>
-          <img src="images/paiement-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>Réservations</h3>
-          <img src="images/réservations-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>E-Billet</h3>
-          <img src="images/billet-vad.png" width="800" />
-				</section>
-				<section>
-          <h3>Responsive design</h3>
-          <img src="images/responsive1.png" width="200" />
-          <img src="images/responsive2.png" width="200" />
-          <img src="images/responsive3.png" width="200" />
-          <img src="images/responsive4.png" width="200" />
-				</section>
-				<section>
 					<a href="https://excalidraw.com/#json=0ym7I-J57yMG34O2PR2vi,5rzYIRqC_A8RWPHH_S3rdQ" target="_blank">🔗 Schema  d'infra</a>
           <img src="images/excalidraw-cineoffice.png"/>
 				</section>
@@ -373,6 +373,333 @@ test('adds 1 + 2 to equal 3', () => {
 <section>
   <h3>Frontend/Single page app react/redux/redux-saga</h3>
   <a href="https://redux-saga-test-plan.jeremyfairbank.com/">Tests de la logique "métier" de redux-saga avec redux-saga-test-plan</a>
+</section>
+<section>
+  <h3 style="margin-top: 0px;">CI/CD</h3>
+  <p>Tests automatisés dans un pipeline Gitlab</p>
+  <pre style="font-size: 30%;">
+    <code>
+      <script type="text/template">
+# =============================================================================
+#  CI/CD GitLab — Frontend Vite + Backend Node.js
+#  Arborescence attendue :
+#    frontend/   (Vite : scripts "build", "test:unit")
+#    backend/    (Node : scripts "build", "test:unit", "test:api", "db:seed")
+#    ci/fixtures/mautic-seed.sql   (jeu de données de test Mautic)
+# =============================================================================
+
+stages:
+  - install
+  - lint
+  - build
+  - test
+  - deploy
+
+variables:
+  # Registre des images. Le Dependency Proxy GitLab n'est disponible que pour
+  # les projets d'un GROUPE (pas d'un namespace personnel => erreur 404).
+  # Si le projet est déplacé dans un groupe, remplacer par :
+  #   IMAGE_PREFIX: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}
+  IMAGE_PREFIX: docker.io
+
+  NODE_IMAGE: ${IMAGE_PREFIX}/node:22-alpine
+  DIND_IMAGE: ${IMAGE_PREFIX}/docker:27-dind
+  MONGO_IMAGE: ${IMAGE_PREFIX}/mongo:7
+  MYSQL_IMAGE: ${IMAGE_PREFIX}/mysql:8.0
+  MAUTIC_IMAGE: ${IMAGE_PREFIX}/mautic/mautic:5-apache
+
+  # Docker-in-Docker (TLS)
+  DOCKER_HOST: tcp://docker:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "/certs/client"
+
+  # Bases de test
+  MONGO_URL: mongodb://docker:27017/app_test
+  MYSQL_ROOT_PASSWORD: root
+  MYSQL_DATABASE: mautic
+  MYSQL_USER: mautic
+  MYSQL_PASSWORD: mautic
+  MAUTIC_URL: http://docker:8080
+  MAUTIC_ADMIN_USER: admin
+  MAUTIC_ADMIN_PASSWORD: Admin1234!
+  MAUTIC_ADMIN_EMAIL: admin@example.test
+
+  API_PORT: "3000"
+
+default:
+  image:
+    name: $NODE_IMAGE
+    pull_policy: [if-not-present, always] # réutilise l'image déjà présente sur le runner
+  interruptible: true
+
+# -----------------------------------------------------------------------------
+#  Caches node_modules (clé = hash du package-lock.json)
+# -----------------------------------------------------------------------------
+.cache_frontend: &cache_frontend
+  key:
+    files: [frontend/package-lock.json]
+    prefix: frontend
+  paths: [frontend/node_modules/]
+  policy: pull
+
+.cache_backend: &cache_backend
+  key:
+    files: [backend/package-lock.json]
+    prefix: backend
+  paths: [backend/node_modules/]
+  policy: pull
+
+.frontend:
+  cache: *cache_frontend
+  before_script:
+    - cd frontend
+    - "[ -d node_modules ] || npm ci --prefer-offline --no-audit" # fallback si cache absent
+
+.backend:
+  cache: *cache_backend
+  before_script:
+    - cd backend
+    - "[ -d node_modules ] || npm ci --prefer-offline --no-audit"
+
+# =============================================================================
+#  INSTALL
+# =============================================================================
+install:frontend:
+  stage: install
+  cache:
+    <<: *cache_frontend
+    policy: pull-push
+  script:
+    - cd frontend
+    - npm ci --prefer-offline --no-audit
+
+install:backend:
+  stage: install
+  cache:
+    <<: *cache_backend
+    policy: pull-push
+  script:
+    - cd backend
+    - npm ci --prefer-offline --no-audit
+
+# =============================================================================
+#  LINT
+# =============================================================================
+lint:frontend:
+  stage: lint
+  extends: .frontend
+  needs: [install:frontend]
+  script:
+    - npm run lint
+
+lint:backend:
+  stage: lint
+  extends: .backend
+  needs: [install:backend]
+  script:
+    - npm run lint
+
+# =============================================================================
+#  BUILD
+# =============================================================================
+build:frontend:
+  stage: build
+  extends: .frontend
+  needs: [install:frontend, lint:frontend]
+  script:
+    - npm run build
+  artifacts:
+    paths: [frontend/dist/]
+    expire_in: 1 week
+
+build:backend:
+  stage: build
+  extends: .backend
+  needs: [install:backend, lint:backend]
+  script:
+    - npm run build --if-present
+  artifacts:
+    paths: [backend/dist/]
+    expire_in: 1 week
+
+# =============================================================================
+#  TESTS UNITAIRES
+# =============================================================================
+test:unit:frontend:
+  stage: test
+  extends: .frontend
+  needs: [install:frontend]
+  script:
+    - npm run test:unit
+  artifacts:
+    when: always
+    reports:
+      junit: frontend/junit.xml
+    expire_in: 1 week
+
+test:unit:backend:
+  stage: test
+  extends: .backend
+  needs: [install:backend]
+  script:
+    - npm run test:unit
+  artifacts:
+    when: always
+    reports:
+      junit: backend/junit.xml
+    expire_in: 1 week
+
+# =============================================================================
+#  TESTS API (MongoDB + MySQL + Mautic via Docker-in-Docker)
+# =============================================================================
+test:api:
+  stage: test
+  needs: [install:backend, build:backend]
+  services:
+    - name: $DIND_IMAGE
+      alias: docker
+      pull_policy: [if-not-present, always]
+  cache:
+    - *cache_backend
+    # Images Docker sauvegardées en .tar : un "docker load" évite tout pull
+    # Changer la clé si une version d'image change.
+    - key: docker-images-mongo7-mysql80-mautic5
+      paths: [.docker-images/]
+      policy: pull-push
+  before_script:
+    - apk add --no-cache docker-cli curl
+    - until docker info >/dev/null 2>&1; do echo "Attente dockerd..."; sleep 2; done
+    # Login au Dependency Proxy uniquement s'il est utilisé
+    - |
+      case "$IMAGE_PREFIX" in
+        *dependency_proxy*) echo "$CI_DEPENDENCY_PROXY_PASSWORD" | docker login -u "$CI_DEPENDENCY_PROXY_USER" --password-stdin "$CI_DEPENDENCY_PROXY_SERVER" ;;
+      esac
+
+    # --- Chargement des images depuis le cache, sinon pull + save ---
+    - mkdir -p .docker-images
+    - |
+      for img in "$MONGO_IMAGE" "$MYSQL_IMAGE" "$MAUTIC_IMAGE"; do
+        f=".docker-images/$(echo "$img" | tr '/:' '__').tar"
+        if [ -f "$f" ]; then
+          echo "Cache hit : $img"; docker load -i "$f"
+        else
+          echo "Cache miss : $img"; docker pull "$img" && docker save "$img" -o "$f"
+        fi
+      done
+
+    - docker network create ci
+
+    # --- MongoDB ---
+    - docker run -d --name mongo --network ci -p 27017:27017 "$MONGO_IMAGE"
+
+    # --- MySQL ---
+    - >
+      docker run -d --name mysql --network ci -p 3306:3306
+      -e MYSQL_ROOT_PASSWORD -e MYSQL_DATABASE -e MYSQL_USER -e MYSQL_PASSWORD
+      "$MYSQL_IMAGE"
+    # TCP explicite : le serveur temporaire d'init n'écoute que sur le socket
+    - until docker exec mysql mysqladmin ping -h127.0.0.1 --protocol=tcp -uroot -p"$MYSQL_ROOT_PASSWORD" --silent; do echo "Attente MySQL..."; sleep 3; done
+
+    # --- Mautic ---
+    - >
+      docker run -d --name mautic --network ci -p 8080:80
+      -e DOCKER_MAUTIC_ROLE=mautic_web
+      -e MAUTIC_DB_HOST=mysql -e MAUTIC_DB_PORT=3306
+      -e MAUTIC_DB_DATABASE="$MYSQL_DATABASE"
+      -e MAUTIC_DB_USER="$MYSQL_USER" -e MAUTIC_DB_PASSWORD="$MYSQL_PASSWORD"
+      "$MAUTIC_IMAGE"
+    - until curl -s -o /dev/null "$MAUTIC_URL"; do echo "Attente Mautic..."; sleep 3; done
+
+    # --- Initialisation Mautic (installation CLI) ---
+    # -w : le WORKDIR de l'image est docroot/, bin/console est à la racine
+    - >
+      docker exec -u www-data -w /var/www/html mautic php bin/console mautic:install "$MAUTIC_URL" --force
+      --db_driver=pdo_mysql --db_host=mysql --db_port=3306
+      --db_name="$MYSQL_DATABASE" --db_user="$MYSQL_USER" --db_password="$MYSQL_PASSWORD"
+      --admin_username="$MAUTIC_ADMIN_USER" --admin_password="$MAUTIC_ADMIN_PASSWORD"
+      --admin_email="$MAUTIC_ADMIN_EMAIL" --admin_firstname=CI --admin_lastname=Bot
+    # Activation de l'API REST + Basic Auth pour les tests
+    - |
+      docker exec -u www-data -w /var/www/html mautic php -r '
+        $f = "config/local.php"; include $f;
+        $parameters["api_enabled"] = true;
+        $parameters["api_enable_basic_auth"] = true;
+        file_put_contents($f, "<?php\n\$parameters = " . var_export($parameters, true) . ";\n");'
+    - docker exec -u www-data -w /var/www/html mautic php bin/console cache:clear
+
+    # --- Seed des bases ---
+    - docker exec -i mysql mysql --default-character-set=utf8mb4 -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" < ci/fixtures/mautic-seed.sql
+    - cd backend
+    - "[ -d node_modules ] || npm ci --prefer-offline --no-audit"
+    - npm run db:seed # utilise MONGO_URL
+
+  script:
+    # Démarrage de l'API puis tests
+    - PORT=$API_PORT node dist/index.js > ../api.log 2>&1 &
+    - |
+      for i in $(seq 1 30); do
+        curl -sf "http://localhost:$API_PORT/api/health" && break
+        [ "$i" = 30 ] && { echo "API injoignable"; cat ../api.log; exit 1; }
+        echo "Attente API..."; sleep 2
+      done
+    - API_URL="http://localhost:$API_PORT" npm run test:api
+  after_script:
+    - docker logs mautic > mautic.log 2>&1 || true
+    - docker logs mysql  > mysql.log  2>&1 || true
+    - docker logs mongo  > mongo.log  2>&1 || true
+  artifacts:
+    when: always
+    paths: ["*.log"]
+    reports:
+      junit: backend/junit-api.xml
+    expire_in: 1 week
+
+# =============================================================================
+#  DÉPLOIEMENT STAGING
+#  Variables CI/CD à définir (masquées/protégées) :
+#    SSH_PRIVATE_KEY, SSH_KNOWN_HOSTS, STAGING_HOST, STAGING_USER, STAGING_PATH
+# =============================================================================
+deploy:staging:
+  stage: deploy
+  image:
+    name: ${IMAGE_PREFIX}/alpine:3.20
+    pull_policy: [if-not-present, always]
+  needs:
+    - build:frontend
+    - build:backend
+    - test:unit:frontend
+    - test:unit:backend
+    - test:api
+  environment:
+    name: staging
+    url: https://$STAGING_HOST
+  resource_group: staging # un seul déploiement à la fois
+  interruptible: false
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - eval "$(ssh-agent -s)"
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+  script:
+    - export TARGET="$STAGING_USER@$STAGING_HOST"
+    - ssh "$TARGET" "mkdir -p $STAGING_PATH/frontend $STAGING_PATH/backend/dist"
+    # Frontend : fichiers statiques
+    - rsync -az --delete frontend/dist/ "$TARGET:$STAGING_PATH/frontend/"
+    # Backend : build + manifestes
+    - rsync -az --delete backend/dist/ "$TARGET:$STAGING_PATH/backend/dist/"
+    - rsync -az backend/package.json backend/package-lock.json "$TARGET:$STAGING_PATH/backend/"
+    - >
+      ssh "$TARGET" "cd $STAGING_PATH/backend
+      && npm ci --omit=dev --no-audit
+      && (pm2 reload api-staging || pm2 start dist/index.js --name api-staging)
+      && pm2 save"
+      </script>
+    </code>
+  </pre>
 </section>
 <section>
 <h3>Sécurité</h3>
