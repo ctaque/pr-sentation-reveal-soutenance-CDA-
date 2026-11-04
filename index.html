@@ -1877,10 +1877,395 @@ EOT
 <h3 style="font-size: 70%;">Déploiement Blue/Green</h3>
 <img src="images/nomad1.png" width="700" />
 </section>
+<section>
+<h3>Sauvegarde de base de donnée</h3>
+<p>Nomad batch job</p>
+<pre style="font-size: 30%; height: 100%;"><code class="terraform" data-trim>
+<script type="text/template">
+job "postgres-backup" {
+  datacenters = ["dc1"]
+  type        = "batch"
+
+  # Ajuste l'horaire / le fuseau selon tes besoins
+  periodic {
+    cron             = "0 3 * * *" # tous les jours à 03h00
+    time_zone        = "Europe/Paris"
+    prohibit_overlap = true
+  }
+
+  group "backup" {
+    count = 1
+
+    # C'est un batch job ponctuel : pas de relance en boucle en cas d'échec,
+    # la prochaine exécution périodique s'en chargera.
+    restart {
+      attempts = 1
+      delay    = "30s"
+      mode     = "fail"
+    }
+
+    reschedule {
+      attempts = 0
+      unlimited = false
+    }
+
+    task "pg-dump-s3" {
+      driver = "raw_exec"
+      config {
+        # command doit être un exécutable, pas une chaîne shell complète :
+        # on passe par bash -c pour que les $VAR soient bien expansés.
+        command = "/bin/bash"
+        args = [
+          "-c",
+          "/root/scripts/backup-db.sh \"$DATABASE_URL\" \"$S3_BUCKET\" \"$RETENTION_DAYS\""
+        ]
+      }
+
+      # Secrets et config injectés depuis les variables Nomad
+      # (créées au préalable avec `nomad var put`, cf. note ci-dessous)
+      template {
+        data = <<-EOT
+        {{- with nomadVar "nomad/jobs/postgres-backup" }}
+        DATABASE_URL={{ .DATABASE_URL }}
+        S3_BUCKET={{ .S3_BUCKET }}
+        RETENTION_DAYS={{ .RETENTION_DAYS }}
+        AWS_ACCESS_KEY_ID={{ .AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY={{ .AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION={{ .AWS_DEFAULT_REGION }}
+        {{- end }}
+        EOT
+
+        destination = "secrets/backup.env"
+        env         = true
+      }
+
+      resources {
+        cpu    = 200
+        memory = 256
+      }
+    }
+  }
+}
+</script></code></pre>
+</section>
+<section>
+<h3>Sauvegarde de base de donnée</h3>
+<p>Shell script sauvegarde</p>
+<pre style="font-size: 40%; height: 100%;"><code class="language-bash" data-trim><script type="text/template">
+#!/bin/bash
+
+set -euo pipefail
+
+# Script de sauvegarde PostgreSQL vers S3
+# Usage: ./backup-db.sh <DATABASE_URL> <S3_BUCKET> [RETENTION_DAYS]
+
+# Couleurs pour les logs
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Vérification des arguments
+if [ $# -lt 2 ]; then
+    log_error "Usage: $0 <DATABASE_URL> <S3_BUCKET> [RETENTION_DAYS]"
+    log_error "Example: $0 'postgresql://user:password@localhost:5432/mydb' 'my-backup-bucket' 30"
+    exit 1
+fi
+
+DATABASE_URL="$1"
+S3_BUCKET="$2"
+RETENTION_DAYS="${3:-30}"
+
+# Vérification des dépendances
+command -v pg_dump >/dev/null 2>&1 || {
+    log_error "pg_dump n'est pas installé. Installez postgresql-client."
+    exit 1
+}
+
+command -v aws >/dev/null 2>&1 || {
+    log_error "aws CLI n'est pas installé. Installez awscli."
+    exit 1
+}
+
+# Création du nom de fichier avec timestamp
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_NAME="backup_${TIMESTAMP}.sql.gz"
+BACKUP_PATH="/tmp/${BACKUP_NAME}"
+
+log_info "Démarrage de la sauvegarde de la base de données..."
+log_info "Bucket S3: s3://${S3_BUCKET}"
+log_info "Fichier: ${BACKUP_NAME}"
+
+# Extraction des informations de connexion depuis l'URL
+# Format: postgresql://user:password@host:port/database
+if [[ ! $DATABASE_URL =~ ^postgresql:// ]]; then
+    log_error "Format de DATABASE_URL invalide. Format attendu: postgresql://user:password@host:port/database"
+    exit 1
+fi
+
+# Sauvegarde de la base de données
+log_info "Création du dump PostgreSQL..."
+if pg_dump "$DATABASE_URL" --format=plain --no-owner --no-acl --exclude-extension=pg_cron | gzip > "$BACKUP_PATH"; then
+    log_info "Dump créé avec succès: $BACKUP_PATH"
+    BACKUP_SIZE=$(du -h "$BACKUP_PATH" | cut -f1)
+    log_info "Taille du backup: $BACKUP_SIZE"
+else
+    log_error "Échec de la création du dump"
+    rm -f "$BACKUP_PATH"
+    exit 1
+fi
+
+# Upload vers S3
+log_info "Upload vers S3..."
+if aws s3 cp "$BACKUP_PATH" "s3://${S3_BUCKET}/backups/${BACKUP_NAME}" \
+    --metadata "backup-date=${TIMESTAMP},retention-days=${RETENTION_DAYS}"; then
+    log_info "Upload réussi vers s3://${S3_BUCKET}/backups/${BACKUP_NAME}"
+else
+    log_error "Échec de l'upload vers S3"
+    rm -f "$BACKUP_PATH"
+    exit 1
+fi
+
+# Nettoyage du fichier local
+rm -f "$BACKUP_PATH"
+log_info "Fichier temporaire supprimé"
+
+# Nettoyage des anciens backups (optionnel)
+if [ "$RETENTION_DAYS" -gt 0 ]; then
+    log_info "Nettoyage des backups de plus de ${RETENTION_DAYS} jours..."
+    CUTOFF_DATE=$(date -d "${RETENTION_DAYS} days ago" +%Y%m%d 2>/dev/null || date -v-${RETENTION_DAYS}d +%Y%m%d 2>/dev/null)
+
+    aws s3 ls "s3://${S3_BUCKET}/backups/" | while read -r line; do
+        BACKUP_FILE=$(echo "$line" | awk '{print $4}')
+        if [[ $BACKUP_FILE =~ backup_([0-9]{8})_ ]]; then
+            FILE_DATE="${BASH_REMATCH[1]}"
+            if [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
+                log_info "Suppression de l'ancien backup: $BACKUP_FILE"
+                aws s3 rm "s3://${S3_BUCKET}/backups/${BACKUP_FILE}" || log_warn "Échec de suppression de $BACKUP_FILE"
+            fi
+        fi
+    done
+fi
+
+log_info "✓ Sauvegarde terminée avec succès!"
+</script></code></pre>
+</section>
+<section>
+<h3>Restauration base de donnée</h3>
+<p>Shell script restauration</p>
+<pre style="font-size: 40%; height: 100%;"><code class="language-bash" data-trim><script type="text/template">
+#!/bin/bash
+
+set -euo pipefail
+
+# Script de restauration PostgreSQL depuis S3
+# Usage: ./restore-db.sh <DATABASE_URL> <S3_BUCKET> <BACKUP_FILE>
+
+# Couleurs pour les logs
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_debug() {
+    echo -e "${BLUE}[DEBUG]${NC} $1"
+}
+
+# Vérification des arguments
+if [ $# -eq 2 ]; then
+    # Mode: lister les backups disponibles
+    DATABASE_URL="$1"
+    S3_BUCKET="$2"
+    LIST_MODE=true
+elif [ $# -eq 3 ]; then
+    DATABASE_URL="$1"
+    S3_BUCKET="$2"
+    BACKUP_FILE="$3"
+    LIST_MODE=false
+else
+    log_error "Usage: $0 <DATABASE_URL> <S3_BUCKET> [BACKUP_FILE]"
+    log_error ""
+    log_error "Exemples:"
+    log_error "  # Lister les backups disponibles:"
+    log_error "  $0 'postgresql://user:password@localhost:5432/mydb' 'my-backup-bucket'"
+    log_error ""
+    log_error "  # Restaurer un backup spécifique:"
+    log_error "  $0 'postgresql://user:password@localhost:5432/mydb' 'my-backup-bucket' 'backup_20260128_120000.sql.gz'"
+    log_error ""
+    log_error "  # Restaurer le dernier backup:"
+    log_error "  $0 'postgresql://user:password@localhost:5432/mydb' 'my-backup-bucket' 'latest'"
+    exit 1
+fi
+
+# Vérification des dépendances
+command -v psql >/dev/null 2>&1 || {
+    log_error "psql n'est pas installé. Installez postgresql-client."
+    exit 1
+}
+
+command -v aws >/dev/null 2>&1 || {
+    log_error "aws CLI n'est pas installé. Installez awscli."
+    exit 1
+}
+
+# Mode listing
+if [ "$LIST_MODE" = true ]; then
+    log_info "Backups disponibles dans s3://${S3_BUCKET}/backups/:"
+    echo ""
+    aws s3 ls "s3://${S3_BUCKET}/backups/" | grep "backup_" | sort -r | while read -r line; do
+        echo "  $line"
+    done
+    echo ""
+    log_info "Pour restaurer un backup, utilisez:"
+    log_info "$0 '$DATABASE_URL' '$S3_BUCKET' <nom_du_fichier>"
+    exit 0
+fi
+
+# Validation du format de DATABASE_URL
+if [[ ! $DATABASE_URL =~ ^postgresql:// ]]; then
+    log_error "Format de DATABASE_URL invalide. Format attendu: postgresql://user:password@host:port/database"
+    exit 1
+fi
+
+# Détermination du fichier de backup à restaurer
+if [ "$BACKUP_FILE" = "latest" ]; then
+    log_info "Recherche du dernier backup..."
+    BACKUP_FILE=$(aws s3 ls "s3://${S3_BUCKET}/backups/" | grep "backup_" | sort -r | head -n1 | awk '{print $4}')
+    if [ -z "$BACKUP_FILE" ]; then
+        log_error "Aucun backup trouvé dans s3://${S3_BUCKET}/backups/"
+        exit 1
+    fi
+    log_info "Dernier backup trouvé: $BACKUP_FILE"
+fi
+
+S3_PATH="s3://${S3_BUCKET}/backups/${BACKUP_FILE}"
+LOCAL_PATH="/tmp/${BACKUP_FILE}"
+
+# Vérification de l'existence du backup sur S3
+log_info "Vérification de l'existence du backup..."
+if ! aws s3 ls "$S3_PATH" >/dev/null 2>&1; then
+    log_error "Le backup $BACKUP_FILE n'existe pas sur S3"
+    log_info "Utilisez '$0 $DATABASE_URL $S3_BUCKET' pour lister les backups disponibles"
+    exit 1
+fi
+
+# Avertissement
+log_warn "⚠️  ATTENTION: Cette opération va ÉCRASER la base de données actuelle!"
+log_warn "Base de données: ${DATABASE_URL}"
+log_warn "Backup: ${BACKUP_FILE}"
+echo ""
+read -p "Êtes-vous sûr de vouloir continuer? (tapez 'yes' pour confirmer): " CONFIRMATION
+
+if [ "$CONFIRMATION" != "yes" ]; then
+    log_info "Restauration annulée"
+    exit 0
+fi
+
+# Téléchargement du backup depuis S3 (sauf si déjà présent localement)
+if [ -f "$LOCAL_PATH" ]; then
+    LOCAL_SIZE=$(du -h "$LOCAL_PATH" | cut -f1)
+    log_warn "Le fichier $LOCAL_PATH existe déjà localement ($LOCAL_SIZE)"
+
+    # Comparaison optionnelle de la taille avec la version S3, pour détecter un fichier tronqué/obsolète
+    REMOTE_SIZE_BYTES=$(aws s3 ls "$S3_PATH" | awk '{print $3}')
+    LOCAL_SIZE_BYTES=$(stat -c%s "$LOCAL_PATH" 2>/dev/null || stat -f%z "$LOCAL_PATH")
+
+    if [ -n "$REMOTE_SIZE_BYTES" ] && [ "$REMOTE_SIZE_BYTES" != "$LOCAL_SIZE_BYTES" ]; then
+        log_warn "La taille locale ($LOCAL_SIZE_BYTES octets) diffère de celle sur S3 ($REMOTE_SIZE_BYTES octets)"
+        read -p "Retélécharger le fichier depuis S3? (tapez 'yes' pour retélécharger): " REDOWNLOAD
+        if [ "$REDOWNLOAD" = "yes" ]; then
+            log_info "Téléchargement du backup depuis S3..."
+            if aws s3 cp "$S3_PATH" "$LOCAL_PATH"; then
+                BACKUP_SIZE=$(du -h "$LOCAL_PATH" | cut -f1)
+                log_info "Backup téléchargé: $LOCAL_PATH ($BACKUP_SIZE)"
+            else
+                log_error "Échec du téléchargement du backup"
+                exit 1
+            fi
+        else
+            log_info "Utilisation du fichier local existant malgré la différence de taille"
+        fi
+    else
+        log_info "Taille identique à celle sur S3, réutilisation du fichier local (téléchargement ignoré)"
+    fi
+else
+    log_info "Téléchargement du backup depuis S3..."
+    if aws s3 cp "$S3_PATH" "$LOCAL_PATH"; then
+        BACKUP_SIZE=$(du -h "$LOCAL_PATH" | cut -f1)
+        log_info "Backup téléchargé: $LOCAL_PATH ($BACKUP_SIZE)"
+    else
+        log_error "Échec du téléchargement du backup"
+        exit 1
+    fi
+fi
+
+# Extraction du nom de la base de données
+DB_NAME=$(echo "$DATABASE_URL" | sed -n 's|.*\/\([^?]*\).*|\1|p')
+log_info "Base de données cible: $DB_NAME"
+
+# Arrêt des connexions actives (optionnel, décommenter si nécessaire)
+# log_warn "Arrêt des connexions actives à la base de données..."
+# psql "$DATABASE_URL" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$DB_NAME' AND pid <> pg_backend_pid();" || true
+
+# Suppression de la base de données existante (optionnel)
+log_warn "Nettoyage de la base de données..."
+# Décommenter les lignes suivantes pour supprimer et recréer la base
+# BASE_URL=$(echo "$DATABASE_URL" | sed 's|/[^/]*$|/postgres|')
+# psql "$BASE_URL" -c "DROP DATABASE IF EXISTS $DB_NAME;"
+# psql "$BASE_URL" -c "CREATE DATABASE $DB_NAME;"
+
+log_info "Restauration de la base de données..."
+
+set +e
+gunzip -c "$LOCAL_PATH" | psql "$DATABASE_URL" 2> /tmp/restore_error.log
+RESTORE_STATUS=$?
+set -e
+
+if [ $RESTORE_STATUS -eq 0 ]; then
+    log_info "✓ Restauration terminée avec succès!"
+else
+    log_error "Échec de la restauration"
+    log_error "Détails de l'erreur :"
+    cat /tmp/restore_error.log
+    rm -f "$LOCAL_PATH"
+    exit 1
+fi
+</script></code></pre>
+</section>
+<section>
+<h3>Fin</h3>
+<p>Merci pour votre écoute</p>
+</section>
 			</div>
 		</div>
 
 		<script src="dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@hiseb/confetti@2.2.0/dist/confetti.min.js"></script>
 		<script src="dist/plugin/notes.js"></script>
 		<script src="dist/plugin/markdown.js"></script>
 		<script src="dist/plugin/highlight.js"></script>
@@ -1895,5 +2280,14 @@ EOT
 				plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
 			});
 		</script>
+
+    <script type="text/javaScript">
+    Reveal.on('slidechanged', (event) => {
+        // event.previousSlide, event.currentSlide, event.indexh, event.indexv
+        if (event.indexh === document.getElementsByTagName("section").length - 1) {
+            confetti();
+        }
+    });
+    </script>
 	</body>
 </html>
