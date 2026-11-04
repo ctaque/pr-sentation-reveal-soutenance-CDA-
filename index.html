@@ -310,14 +310,58 @@ db.collection.aggregate([
           <img src="images/gitlab.png" width="400" />
 				</section>
 				<section>
-<h3>Sécurité</h3>
-				</section>
-<section>
-  <h3>Node.js Best practices</h3>
-  <a href="https://github.com/goldbergyoni/nodebestpractices">https://github.com/goldbergyoni/nodebestpractices</a>
-  <p>Scanner les dépendances avec un outil comme dépendabot</p>
+  <h3>Stratégies de tests</h3>
 </section>
-				<section>
+<section>
+  <h3>Tests contre l'api Node.Js Express.Js</h3>
+  <p><a href="https://www.npmjs.com/package/supertest">Supertest en CI/CD</a></p>
+  <pre><code>
+const request = require('supertest');
+const express = require('express');
+
+const app = express();
+
+app.get('/user', function(req, res) {
+  res.status(200).json({ name: 'john' });
+});
+
+request(app)
+  .get('/user')
+  .expect('Content-Type', /json/)
+  .expect('Content-Length', '15')
+  .expect(200)
+  .end(function(err, res) {
+    if (err) throw err;
+  });
+  </code></pre>
+</section>
+<section>
+  <h3>Tests unitaires</h3>
+  <p><a href="https://jestjs.io/">Jest,</a>&nbsp;<a href="https://vitest.dev/">Vitest</a></p>
+  <pre>
+    <code>
+import { expect, test } from 'vitest'
+import { sum } from './sum.js'
+
+test('adds 1 + 2 to equal 3', () => {
+  expect(sum(1, 2)).toBe(3)
+})
+    </code>
+</pre>
+</section>
+<section>
+  <h3>Tests de charge</h3>
+  <p><a href="https://jmeter.apache.org/">Jmeter</a></p>
+  <p>Logger des timestamps d'execution des méthode d'endpoints et détecter des goulots d'étranglement</p>
+</section>
+<section>
+  <h3>Frontend/Single page app react/redux/redux-saga</h3>
+  <a href="https://redux-saga-test-plan.jeremyfairbank.com/">Tests de la logique "métier" de redux-saga avec redux-saga-test-plan</a>
+</section>
+<section>
+<h3>Sécurité</h3>
+</section>
+<section>
 <h3>CORS</h3>
 <pre style="font-size: 30%;"><code class="language-typescript" data-trim><script type="text/template">
 import fs from 'fs';
@@ -367,13 +411,48 @@ http://localhost:3000
 </script></code></pre>
 </section>
 <section>
+  <h3>Rate limiting</h3>
+  <a href="https://express-rate-limit.mintlify.app/overview">Express rate limit</a>
+  <pre><code>
+  var RateLimit = require('express-rate-limit');
+  var MongoStore = require('rate-limit-mongo');
+
+  var limiter = new RateLimit({
+    store: new MongoStore({
+      uri: 'mongodb://127.0.0.1:27017/test_db',
+      user: process.env.MONGODB_USER,
+      password: process.env.MONGODB_PASSWORD,
+      // should match windowMs
+      expireTimeMs: 15 * 60 * 1000,
+      errorHandler: console.error.bind(null, 'rate-limit-mongo')
+      // see Configuration section for more options and details
+    }),
+    max: 100,
+    // should match expireTimeMs
+    windowMs: 15 * 60 * 1000
+  });
+
+  //  apply to all requests
+  app.use(limiter);
+</code></pre>
+</section>
+<section>
 <h3>Hasher un mot de passe: BCrypt</h3>
 </section>
 <section>
 <h3>Sécuriser un Cookie: httpOnly</h3>
 </section>
 <section>
+  <h3>Dépendabot</h3>
+  <p>Scanner les dépendances et créer des PR de montée en version avec un outil comme dépendabot pour détecter les vulnérabilités</p>
+  <img src="images/dependabot.png" />
+</section>
+<section>
 <h3>Audit de sécurité IA</h3>
+</section>
+<section>
+  <h3>Node.js Best practices</h3>
+  <a href="https://github.com/goldbergyoni/nodebestpractices">https://github.com/goldbergyoni/nodebestpractices</a>
 </section>
 <section>
 <h3>FastAndFar.app</h3>
@@ -1203,6 +1282,44 @@ LEFT JOIN route_photos ph ON ph.route_id = rp.id
 WHERE ST_DWithin(rp.start_geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geography, $3 * 1000) --garde les départs situés dans le rayon
 ORDER BY distance_km ASC
 LIMIT $4
+  </code></pre>
+</section>
+<section>
+<h3 style="font-size: 70%;">Accès aux données: delete (soft)</h3>
+<pre style="font-size: 35%;"><code class="language-rust">
+    let result = sqlx::query!(
+        "UPDATE route_collections SET deleted_at = NOW() WHERE uuid = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING id",
+        path.uuid,
+        user.id
+    )
+    .fetch_optional(&data.db)
+    .await;
+  </code></pre>
+</section>
+<section>
+<h3 style="font-size: 80%;">Accès aux données: update (Anonymisation)</h3>
+<h3 style="font-size: 80%;">Conforme à la RGPD</h3>
+<a href="https://www.cnil.fr/fr/technologies/lanonymisation-de-donnees-personnelles" style="font-size: 50%;">https://www.cnil.fr/fr/technologies/lanonymisation-de-donnees-personnelles</a>
+<pre style="font-size: 35%;"><code class="language-rust">
+// Unique per id regardless of any prior email, so no collision risk even without a DB
+// uniqueness constraint on `email` (there isn't one — see nickname's, which is
+// constrained, hence NULLed instead of set to a placeholder).
+let anonymized_email = format!("deleted-user-{}@deleted.fastandfar.app", user_id);
+
+let result = sqlx::query(
+    "UPDATE users SET \
+        email = $1, \
+        name = 'Deleted user', \
+        nickname = NULL, \
+        deletion_requested_at = NULL, \
+        deletion_warning_sent_at = NULL, \
+        anonymized_at = now() \
+     WHERE id = $2",
+)
+.bind(&anonymized_email)
+.bind(user_id)
+.execute(pool)
+.await;
   </code></pre>
 </section>
 <section>
