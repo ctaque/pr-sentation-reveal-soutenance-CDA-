@@ -1804,6 +1804,14 @@ WHERE ST_DWithin(rp.start_geom, ST_SetSRID(ST_MakePoint($2, $1), 4326)::geograph
 ORDER BY distance_km ASC
 LIMIT $4
   </code></pre>
+<aside class="notes">
+<ul>
+  <li><small>INNER JOIN : renvoie des lignes lorsqu'il y a une correspondance dans les deux tables.</small></li>
+  <li><small>LEFT JOIN : renvoie toutes les lignes de la table de gauche, même s'il n'y a pas de correspondances dans la table de droite</small></li>
+  <li><small>RIGHT JOIN : renvoie toutes les lignes de la table de droite, même s'il n'y a pas de correspondances dans la table de gauche.</small></li>
+  <li><small>FULL JOIN : combine les résultats des joints externes gauche et droite</small></li>
+</ul>
+</aside>
 </section>
 <section>
 <h3 style="font-size: 70%;">Accès aux données: delete (soft)</h3>
