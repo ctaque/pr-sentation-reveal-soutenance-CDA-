@@ -11,7 +11,7 @@
 
 		<link rel="stylesheet" href="dist/reset.css" />
 		<link rel="stylesheet" href="dist/reveal.css" />
-		<link rel="stylesheet" href="dist/theme/black.css" />
+		<link rel="stylesheet" href="dist/theme/night.css" />
 
 		<!-- Theme used for syntax highlighted code -->
 		<link rel="stylesheet" href="dist/plugin/highlight/monokai.css" />
@@ -21,8 +21,11 @@
 			<div class="slides">
 				<section>
           <h3>Présentation</h3>
-          <p>Cyprien Taque, développeur full stack avec 7 ans d'expérience, issue d'une reconversion réussie de l'industrie.</p>
-				</section>
+            <p>Cyprien Taque, développeur full stack avec 7 ans d'expérience.</p>
+          <aside class="notes">
+            <p>Et une reconversion réussie de l'industrie.</p>
+        </aside>
+        </section>
 				<section>
           <h3>Projet Cine.Boutique, Billetterie de cinéma</h3>
           <br/>
@@ -259,15 +262,48 @@ MONGO_DATABASE=app
 MAUTIC_VERSION=7-apache
 MAUTIC_PORT=8080
 </script></code></pre>
+        <aside class="notes">
+    <p>Installation des <strong>services</strong> sur le poste de travail :</p>
+    <p>MongoDB, Mautic et Mysql, via <strong>docker compose</strong></p>
+        </aside>
 				</section>
 				<section>
 					<a href="https://excalidraw.com/#json=0ym7I-J57yMG34O2PR2vi,5rzYIRqC_A8RWPHH_S3rdQ" target="_blank">🔗 Schema  d'infra</a>
           <img src="images/excalidraw-cineoffice.png"/>
+          <aside class="notes">
+          <small>Choix d'infra VAD :</small>
+          <ul>
+      <li><small>Backend : <strong>Nodejs</strong> (écosystème existant et développeurs connaissant le js).</small></li>
+            <li><small>Frontend : <strong>React/Typescript/Redux/Redux-Saga</strong>(React/TS s'est avéré être un soulagement pour les dévs).</small></li>
+            <li><small>Db : <strong>Mongodb</strong> (js, idem écosystème existants).</small></li>
+      <li><small>Cache : <strong>Varnish</strong> en RAM pour les <strong>requetes GET souvent demandées.</strong> ne necessitant pas d'être à jour en temps réel.</small></li>
+            <li><small>Marketing (envoi de newsletters) : Mautic.</small></li>
+          </ul>
+          <p><small>Avec du recul, d'autres choix architecturaux auraient pu être faits :</small></p>
+          <ul>
+            <li><small>
+               Le backend et le frontend auraient pu être faits en <strong>Elixir</strong>, avec le framework <strong>Pheonix et ses LiveViews</strong>, (mais ça fait un langage et un framework à apprendre, quand personne dans le service ne connaît le langage...) :
+               <li> <strong>Moins de dépendances</strong>, <strong>maintenabilité facilitée</strong>, pas <strong>d’API à maintenir</strong> entre le front et le back : pas de <strong>REST/GraphQL, pas de types dupliqués, pas de state management client (Redux, React Query…).</strong></li>
+               <li>La VM BEAM d'Erlang sait gérer les pics de trafic.</small></li>
+            </li>
+            <li><small>Bdd : la base <strong>Mongo</strong> aurait pu être <strong>Postgresql</strong> : <strong>moins de mises à jour</strong>, moins de nécessité de <strong>corrélation entre les versions de node, du driver et de mongo</strong></small></li>
+          </ul>
+          </aside>
 				</section>
 				<section>
-					<p>Composant métier</p>
-          <ul style="font-size: 70%; text-align: left; align-self: flex start;"><li>Transformation du panier</li><li>requête de paiement, Server Sent Notifications/webhook</li><li>transaction java</li></ul>
+					<p>Composant métier: réservation d'une place</p>
           <img src="images/transaction.png" />
+          <aside class="notes">
+          <ol style="font-size: 80%;">
+            <p><strong>Tokenisation</strong> (Jeton) de la carte bancaire du client via un <strong>formulaire</strong> "hosted fields"</p>
+            <li>Envoi d'une <strong>requête POST</strong> par le navigateur du client avec le <strong>panier</strong> et le <strong>token de carte</strong></li>
+            <li>Réception de la requête sur le serveur Nodejs, <strong>recalcul du montant à payer</strong>, <strong>transformation du panier</strong> en transaction Java et <strong>enregistement</strong> de la transaction pour envoi ultérieur</li>
+            <li>Initialisation de la <strong>requête de paiement</strong> au serveur de paiement (demande <strong>autorisation</strong>) avec le <strong>token</strong> de la carte bancaire et le <strong>montant de la transaction</strong></li>
+            <li>Attente de réponse de la demande d'autorisation en <strong>Server Sent Notification</strong> via un <strong>webhook</strong></li>
+            <li>En cas d'autorisation accordée: <strong>envoi de la transaction</strong> vers le webservice Java, <strong>capture</strong> de l'autorisation de paiement</li>
+            <li>En cas d'erreur (fraude, solde insuffisant), <strong>informer le client</strong> par mail et via un msg <strong>websocket</strong> vers le <strong>navigateur de client</strong></li>
+          </ol>
+  </aside>
 				</section>
 <section>
   <h3>Composants d'accès aux données : collection MongoDB</h3>
@@ -324,6 +360,9 @@ db.collection.aggregate([
     <li>Délais</li>
   </ul>
           <img src="images/gitlab.png" width="400" />
+  <aside class="notes">
+    <p>Et gérer les <strong>incidents</strong></p>
+  </aside>
 				</section>
 				<section>
   <h3>Stratégies de tests</h3>
@@ -350,6 +389,9 @@ request(app)
     if (err) throw err;
   });
   </code></pre>
+  <aside class="notes">
+    <p>Tests des endpoints contre l'api Nodejs</p>
+  </aside>
 </section>
 <section>
   <h3>Tests unitaires</h3>
@@ -364,15 +406,59 @@ test('adds 1 + 2 to equal 3', () => {
 })
     </code>
 </pre>
+
+<aside class="notes">
+    <ul>
+      <li>Test de petites <strong>portions de code</strong></li>
+      <li>Dont les <strong>Inputs</strong> et <strong>Outputs</strong> sont connus</li>
+      <li>ex: <strong>TTC = HT+TVA</strong></li>
+    </ul>
+</aside>
 </section>
 <section>
   <h3>Tests de charge</h3>
-  <p><a href="https://jmeter.apache.org/">Jmeter</a></p>
-  <p>Logger des timestamps d'execution des méthode d'endpoints et détecter des goulots d'étranglement</p>
+    <p><a href="https://jmeter.apache.org/">Jmeter</a></p>
+  <aside class="notes">
+    <p>Logger des <strong>timestamps</strong> dans les <strong>endpoints de l'api</strong> pour détecter des <strong>goulots</strong> d'étranglement</p>
+  </aside>
 </section>
 <section>
-  <h3>Frontend/Single page app react/redux/redux-saga</h3>
-  <a href="https://redux-saga-test-plan.jeremyfairbank.com/">Tests de la logique "métier" de redux-saga avec redux-saga-test-plan</a>
+  <h3 style="font-size: 90%;">Tests du store Redux/Redux Saga (Un gestionnaire d'effets secondaires Redux)</h3>
+  <a href="https://redux-saga-test-plan.jeremyfairbank.com/">redux-saga-test-plan</a>
+  <pre style="font-size: 30%;"><code class="language-javascript">
+import { call, put, take } from 'redux-saga/effects';
+import { expectSaga } from 'redux-saga-test-plan';
+
+function* userSaga(api) {
+  const action = yield take('REQUEST_USER');
+  const user = yield call(api.fetchUser, action.payload);
+
+  yield put({ type: 'RECEIVE_USER', payload: user });
+}
+
+it('just works!', () => {
+  const api = {
+    fetchUser: id => ({ id, name: 'Tucker' }),
+  };
+
+  return expectSaga(userSaga, api)
+    // Assert that the `put` will eventually happen.
+    .put({
+      type: 'RECEIVE_USER',
+      payload: { id: 42, name: 'Tucker' },
+    })
+
+    // Dispatch any actions that the saga will `take`.
+    .dispatch({ type: 'REQUEST_USER', payload: 42 })
+
+    // Start the test. Returns a Promise.
+    .run();
+});
+  </code></pre>
+  <aside class="notes">
+    <p>Tester les "sagas" (Un gestionnaire d'effets secondaires Redux)</p>
+    <p>Vérifier l'état du store après distribution des actions redux.</p>
+  </aside>
 </section>
 <section>
   <h3 style="margin-top: 0px;">CI/CD</h3>
@@ -739,7 +825,10 @@ https://*.cine.boutique
 https://leconcorde.fr
 http://localhost:3000
 </code></pre>
-				</section>
+  <aside class="notes">
+    <p><strong>S'assurer</strong> de <strong>l'authenticité</strong> de <strong>l'origine des requêtes</strong></p>
+  </aside>
+</section>
 <section>
 <h3>Balise CSP</h3>
 <pre style="font-size: 40%;"><code class="language-html" data-trim><script type="text/template">
@@ -752,6 +841,10 @@ http://localhost:3000
                frame-src https://*.hipay.com https://*.paypal.com https://accounts.google.com/gsi/;
                font-src https://*.gstatic.com;">
 </script></code></pre>
+  <aside class="notes">
+    <p>(CSP) Stratégie de Sécurité du Contenu</p>
+    <p><strong>Contrôler</strong> quelles ressources, en particulier les <strong>ressources JavaScript</strong>, un document est <strong>autorisé à charger</strong>.</p>
+  </aside>
 </section>
 <section>
   <h3>Rate limiting</h3>
@@ -778,34 +871,92 @@ http://localhost:3000
   //  apply to all requests
   app.use(limiter);
 </code></pre>
+  <aside class="notes">
+    <p>Protège les <strong>serveurs</strong>, les <strong>processeurs</strong> et les <strong>bases de données</strong> contre les <strong>plantages</strong> pendant les <strong>pics de trafic</strong></p>
+  </aside>
 </section>
 <section>
 <h3>Hasher un mot de passe: BCrypt</h3>
+  <aside class="notes">
+    <p>
+      Une fonction de hachage classique <strong>(SHA-256, MD5)</strong> est <strong>conçue pour être rapide</strong>. Pour un mot de passe, <strong>c’est un défaut</strong> : un attaquant qui a volé une base de hashes peut tester des <strong>milliards de candidats par seconde</strong> sur GPU. <strong>bcrypt</strong> prend le contre-pied : il est lent exprès, et on peut régler cette lenteur.
+      Bcrypt prend un paramètre <strong>cost</strong> : Le nombre d’itérations de son étape coûteuse vaut <strong>2^cost</strong>
+    </p>
+ <table>                                    
+ <thead>                                  
+   <tr>                                   
+    <th>cost</th><th>itérations</th>
+  <th>Temps typique sur un CPU récent</th>            
+   </tr>                                  
+ </thead>                                 
+<tbody>                                  
+   <tr>                                   
+     <td>2^10=</td><td>1 024</td><td>~50–100 +ms</td>                                        
+    </tr>                                  
+   <tr>                                   
+      <td>2^12=</td><td>4 096</td><td>~200–400+ ms</td>                                       
+   </tr>                                  
+   <tr>                                   
+     <td>2^14=</td><td>16 384</td><td>~1 s</td>                                             
+    </tr>                                  
+</tbody> 
+</table>
+  </aside>
 </section>
 <section>
 <h3>Sécuriser un Cookie: httpOnly</h3>
+  <aside class="notes">
+    <p>Un cookie HttpOnly est un type de cookie HTTP qui <strong>ne peut pas être lu ni modifié par des scripts côté client</strong></p>
+  </aside>
 </section>
 <section>
   <h3>Dépendabot</h3>
-  <p>Scanner les dépendances et créer des PR de montée en version avec un outil comme dépendabot pour détecter les vulnérabilités</p>
+  <ul>
+    <li>Scanner les dépendances</li><li>détecter les vulnérabilités</li>
+  </ul>
   <img src="images/dependabot.png" />
+  <aside class="notes">
+    <p>+ Créer des PR de montées en version des dépendances</p>
+  </aside>
 </section>
 <section>
 <h3>Audit de sécurité IA</h3>
+  <aside class="notes">
+     détecter les vulnérablités par des audits de sécurité
+    <ul>
+      <li>Via une <strong>IA</strong>(claude, codex...)</li>
+      <li>Via un <strong>cabinet spécialisé</strong> en cyber-sécurité</li>
+    </ul>
+  </aside>
 </section>
 <section>
   <h3>Node.js Best practices</h3>
-  <a href="https://github.com/goldbergyoni/nodebestpractices">https://github.com/goldbergyoni/nodebestpractices</a>
+  <a href="https://github.com/goldbergyoni/nodebestpractices">https://github.com/goldbergyoni/nodebestpractices</a> 
+  <aside class="notes">
+    <p>Eventuellement s'inspirer des bonnes pratiques de nodeJS</p>
+  </aside>
 </section>
 <section>
 <h3>FastAndFar.app</h3>
-<h3>Contexte</h3>
-<small>Vibe codé, hobby project</small>
+<h3 style="font-size: 95%;">Contexte</h3>
 <p style="font-size: 60%;">Une plateforme pour planifier, enregistrer et partager des activités sportives de plein air.</p>
+  <aside class="notes">
+    <p>Projet perso</p>
+    <p>Vibe codé, hobby project</p>
+  </aside>
 </section>
 <section>
 <h3>Fonctionnalités</h3>
 <img src="images/faf5.png" />
+  <aside class="notes">
+    <ul>
+      <li><strong>Exploration</strong>, <strong>planification</strong>, <strong>enregistrement GPS</strong> et <strong>suivi d'itinéraires</strong></li>
+      <li>Fonctionnalités <strong>communautaires</strong></li>
+      <li><strong>Météo</strong> intégrée</li>
+      <li>Gestion du <strong>matériel</strong></li>
+      <li><strong>Photos de sortie</strong></li>
+    </ul>
+  </aside>
 </section>
 <section>
 <h3>Interfaces utilisateur</h3>
@@ -813,14 +964,30 @@ http://localhost:3000
 <section>
 <h3>Fil d'actualité</h3>
 <img src="images/faf1.png" />
+  <aside class="notes">
+    <p>Mon activité</p>
+    <p>Activité de mes abonnements</p>
+    <p>Collections d'itinéraires</p>
+  </aside>
 </section>
 <section>
 <h3>Carte d'exploration</h3>
 <img src="images/faf2.png" />
+  <aside class="notes">
+    <p><strong>Trouver des itinéraires</strong> dans un <strong>rayon</strong> de <strong>N km</strong>, avec le choix du <strong>mode de transport</strong> (vélo de route, de gravel, VTT, course à pied, randonnée)</p>
+    <p><strong>Forker</strong> et <strong>modifier</strong> des itinéraires</p>
+    <p><strong>Enregistrer</strong> et <strong>naviguer</strong> vers des <strong>points d'intérêts</strong></p>
+  </aside>
 </section>
 <section>
 <h3>Planificateur</h3>
+<a href="https://brouter.de/brouter/index.html">🔗 Routage BRrouter</a>
 <img src="images/faf3.png" />
+  <aside class="notes">
+    <p>Plannifier des itinéraires sur une carte</p>
+    <p>Le <strong>point de départ</strong>, le <strong>point d'arrivée</strong>, les <strong>points itermédiaires</strong>, <strong>Aller/retour</strong>, <strong>Inversion du sens</strong> de direction</p>
+    <p>Une estimation du <strong>dénivelé</strong> et du <strong>type de terrain</strong></p>
+  </aside>
 </section>
 <section>
 <h3>Application iOS/Apple watch</h3>
@@ -2601,7 +2768,7 @@ fi
 			// - https://revealjs.com/config/
 			Reveal.initialize({
 				hash: true,
-
+        slideNumber: 'c/t',
 				// Learn about plugins: https://revealjs.com/plugins/
 				plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
 			});
@@ -2615,5 +2782,12 @@ fi
         }
     });
     </script>
+  <style>
+    .slide-number {
+      font-size: 80% !important;
+      right: 50px !important;
+      bottom: 1.2rem !important;
+    }
+  </style>
 	</body>
 </html>
