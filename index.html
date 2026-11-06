@@ -1724,6 +1724,47 @@ PK primary key · FK foreign key · uniq unique · ? nullable
     )
 }
 </script></code></pre>
+<aside class="notes">
+Est ce que l'ordre des colonnes a une importance :
+Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin
+
+<table>
+  <thead>
+    <tr>
+      <th>Méthode</th>
+      <th>Retour</th>
+      <th>Lignes attendues</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>execute</code></td>
+      <td><code>PgQueryResult</code> (<code>rows_affected()</code>)</td>
+      <td>Aucune lue, même avec un <code>RETURNING</code></td>
+    </tr>
+    <tr>
+      <td><code>fetch_one</code></td>
+      <td><code>T</code></td>
+      <td>Exactement ≥ 1, prend la 1ʳᵉ ; 0 → <code>Err(RowNotFound)</code></td>
+    </tr>
+    <tr>
+      <td><code>fetch_optional</code></td>
+      <td><code>Option&lt;T&gt;</code></td>
+      <td>0 → <code>None</code>, sinon la 1ʳᵉ</td>
+    </tr>
+    <tr>
+      <td><code>fetch_all</code></td>
+      <td><code>Vec&lt;T&gt;</code></td>
+      <td>0..n, tout chargé en mémoire</td>
+    <tr>
+      <td><code>fetch</code></td>
+      <td><code>Stream&lt;Item = Result&lt;T&gt;&gt;</code></td>
+      <td>0..n, ligne par ligne</td>
+    </tr>
+  </tbody>
+</table>
+<p><small><strong>execute</strong> ignore le <small>RETURNING</small>. Si tu as besoin des valeurs renvoyées, utilise <strong>fetch_one ou fetch_optional</strong></small></p>
+</aside>
 </section>
 <section>
 <h3 style="font-size: 70%;">Accès aux données: enregistrer une activité</h3>
@@ -1743,6 +1784,10 @@ PK primary key · FK foreign key · uniq unique · ? nullable
                   description, garmin_activity_id, polar_exercise_id"#
     )
 </script></code></pre>
+<aside class="notes">
+Est ce que l'ordre des colonnes a une importance :
+Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin
+</aside>
 </section>
 <section>
 <h3 style="font-size: 70%;">Accès aux données: routes à proximité</h3>
@@ -1918,7 +1963,7 @@ CMD ["./server"]
 </script></code></pre>
 </section>
 <section>
-<h3>Tests Automatisés et déloiement via github actions: workflow.yml</h3>
+<h3>Tests Automatisés et déploiement via github actions: workflow.yml</h3>
 <div style="display: flex; gap: 1rem;">
 <pre style="font-size: 30%; flex:1; width: 50%;"><code class="language-yaml">
 name: Build & Push Docker Image
@@ -2229,7 +2274,8 @@ test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fin
 </section>
 <section>
 <h3>Déploiement Blue/Green sur un serveur équipé de Nomad</h3>
-<pre style="font-size: 30%"><code class="terraform" data-trim><script type="text/template">
+<div style="display: flex;"> 
+<pre style="font-size: 30%; width: 50%;"><code class="terraform" data-trim><script type="text/template">
 variable "image_tag" {
   type    = string
   default = "latest"
@@ -2374,10 +2420,8 @@ EOT
   }
 }
 </script></code></pre>
-</section>
-<section>
-<h3 style="font-size: 70%;">Déploiement Blue/Green</h3>
-<img src="images/nomad1.png" width="700" />
+<img src="images/nomad1.png" width="50%;" />
+</div>
 </section>
 <section>
 <h3>Sauvegarde de base de donnée</h3>
