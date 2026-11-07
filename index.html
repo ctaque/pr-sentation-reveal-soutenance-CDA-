@@ -297,14 +297,43 @@ MAUTIC_PORT=8080
           <ol style="font-size: 80%;">
             <p><strong>Tokenisation</strong> (Jeton) de la carte bancaire du client via un <strong>formulaire</strong> "hosted fields"</p>
             <li>Envoi d'une <strong>requête POST</strong> par le navigateur du client avec le <strong>panier</strong> et le <strong>token de carte</strong></li>
-            <li>Réception de la requête sur le serveur Nodejs, <strong>recalcul du montant à payer</strong>, <strong>transformation du panier</strong> en transaction Java et <strong>enregistement</strong> de la transaction pour envoi ultérieur</li>
-            <li>Initialisation de la <strong>requête de paiement</strong> au serveur de paiement (demande <strong>autorisation</strong>) avec le <strong>token</strong> de la carte bancaire et le <strong>montant de la transaction</strong></li>
+            <li>Réception de la requête côté serveur Nodejs, <strong>recalcul du montant à payer</strong>, <strong>transformation du panier</strong> en transaction Java et <strong>enregistement</strong> de la transaction pour envoi ultérieur</li>
+            <li>Initialisation d'une <strong>requête de paiement</strong> au serveur de paiement (demande <strong>autorisation</strong>) avec le <strong>token</strong> de la carte bancaire et le <strong>montant de la transaction</strong></li>
             <li>Attente de réponse de la demande d'autorisation en <strong>Server Sent Notification</strong> via un <strong>webhook</strong></li>
             <li>En cas d'autorisation accordée: <strong>envoi de la transaction</strong> vers le webservice Java, <strong>capture</strong> de l'autorisation de paiement</li>
             <li>En cas d'erreur (fraude, solde insuffisant), <strong>informer le client</strong> par mail et via un msg <strong>websocket</strong> vers le <strong>navigateur de client</strong></li>
           </ol>
   </aside>
 				</section>
+<section>
+  <h3 style="font-size: 80%;">Dimensionnement : charge estimée par serveur</h3>
+  <img src="images/VAD-system design.png" />
+  <aside class="notes">
+    <p style="text-decoration: underline;"><small>infra actuelle en scaling vertical :</small></p>
+    <p><small>Mise à niveau d'un seul serveur ou d'une seule machine en ajoutant plus de puissance, comme une RAM supplémentaire, un processeur plus rapide ou plus de stockage.</small></p>
+    <p><small>Avantages</small></p>
+    <ul>
+      <li><small>Simple à configurer car vous n'avez pas besoin de modifier le code de votre application ou de configurer des réseaux distribués.</small></li>
+      <li><small>Pas besoin d’un équilibreur de charge pour diviser le trafic.</small></li>
+    </ul>
+    <p><small>Inconvénients</small></p>
+    <ul>
+      <li><small>A une limite supérieure physique</small></li>
+      <li><small>Crée un seul point d'échec ; si la machine plante, toute votre application tombe en panne</small></li>
+    </ul>
+    <p style="text-decoration: underline;"><small>Infra en scaling horizontal :</small></p>
+    <p><small>Avantages: </small></p>
+    <ul>
+      <li><small>Capacité quasi illimitée puisque vous pouvez continuer à ajouter du matériel de base.</small></li>
+      <li><small>Haute disponibilité et tolérance aux pannes ; si un serveur tombe en panne, les autres continuent de fonctionner.</small></li>
+    </ul>
+    <p><small>Inconvénients</small></p>
+    <ul>
+      <li><small>Complexité architecturale supérieure.</small></li>
+      <li><small>Nécessite un équilibreur de charge.</small></li>
+    </ul>
+  </aside>
+</section>
 <section>
   <h3>Composants d'accès aux données : collection MongoDB</h3>
   <pre style="font-size: 30%">
@@ -1725,9 +1754,9 @@ PK primary key · FK foreign key · uniq unique · ? nullable
 }
 </script></code></pre>
 <aside class="notes">
-Est ce que l'ordre des colonnes a une importance :
-Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin
-
+<small>L'ordre des colonnes a t'il une importance :</small>
+<small>Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin</small>
+<br />
 <table>
   <thead>
     <tr>
@@ -1785,8 +1814,8 @@ Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS
     )
 </script></code></pre>
 <aside class="notes">
-Est ce que l'ordre des colonnes a une importance :
-Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin
+<small>L'ordre des colonnes a t'il une importance :</small>
+<small>Non, chaque champ de TrackRecording a une colonne du même nom, avec un alias AS si besoin</small>
 </aside>
 </section>
 <section>
