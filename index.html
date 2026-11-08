@@ -331,7 +331,7 @@ MAUTIC_PORT=8080
 </section>
 <section style="text-align: left;">
   <h3>Erreurs de conception</h3>
-    <small>Au lieu de MongoDB, les users et réservations auraient dû être stockées dans PG.</small>
+    <small>Au lieu de MongoDB, les users et réservations auraient dû être enregistrés dans PG.</small>
     <small>Au lieu de MongoDB, le cache des datas aurait du être dans un Redis.</small>
   <aside class="notes">
   <p><small>Avec du recul, d'autres choix architecturaux auraient pu être faits :</small></p>
@@ -348,17 +348,16 @@ MAUTIC_PORT=8080
     <small style="color: orange;">cons : Complexité du langage accrue, difficile de trouver des développeurs, écosystème récent</small>
 </section>
 <section style="text-align: left;">
-    <small style="color: #e79ff4;">Ou en Elixir, framework Phoenix et ses LiveViews</small>
+    <small style="color: #e79ff4;">Ou en Elixir, framework Phoenix avec les LiveViews</small>
     <br />
-    <small style="color: #e79ff4;">pros : moins de deps, maintenance facilitée, gère bien les pics de traffic.</small>
+  <small style="color: #e79ff4;">pros : moins de deps, maintenance facilitée <sup>(1)</sup>, gère bien les pics de traffic.</small>
     <br />
     <small style="color: #e79ff4;">cons : complexité accrue, difficile de trouver des développeurs</small>
   <aside class="notes">
   <ul>
     <li>
       <small>
-       Le backend et le frontend auraient pu être faits en <strong>Elixir</strong>, avec le framework <strong>Pheonix et ses LiveViews</strong>
-       <li> <strong>Moins de dépendances</strong>, <strong>maintenabilité facilitée</strong>, pas <strong>d’API à maintenir</strong> entre le front et le back : pas de <strong>REST/GraphQL, pas de types dupliqués, pas de state management client (Redux, React Query…).</strong></li>
+       <li>(1)<strong>Moins de dépendances</strong>, <strong>maintenabilité facilitée</strong>, pas <strong>d’API à maintenir</strong> entre le front et le back : pas de <strong>REST/GraphQL, pas de types dupliqués, pas de state management client (Redux, React Query…).</strong></li>
        <li>La VM BEAM d'Erlang sait gérer les pics de trafic.
         </small>
       </li>
@@ -373,6 +372,81 @@ MAUTIC_PORT=8080
     <br />
     <small style="color: #8bc34a;">cons : complexité accrue, difficultés de trouver des développeurs, gourmand en mémoire</small>
   <aside class="notes">
+  </aside>
+</section>
+<section>
+    <small style="text-align: left;">API Java legacy</small>
+  <pre style="font-size: 30%; margin: 0 auto !important;">
+    <code>
+    GET https://subdomain.cineoffice.fr/vad/cinemas
+    GET https://subdomain.cineoffice.fr/vad/medias
+    GET https://subdomain.cineoffice.fr/vad/shows
+    GET https://subdomain.cineoffice.fr/vad/screens
+    ...
+    </code>
+  </pre>
+  <small style="text-align: left; margin-top: 1rem;">Proposition de data structure :</small>
+  <pre style="font-size: 40%; margin: 1rem auto;"><code class="language-bash">https://cinema.cineoffice.fr/vad/data.json</code></pre>
+  <pre style="font-size: 30%;"><code class="json">
+{
+	"cinemas": [
+		{
+			"id": "cin-001",
+			"name": "Cinéma Le Katorza",
+			"settings": {
+				"sale_after_show_start": "10m"
+			},
+			"medias": [
+				{
+					"id": "med-101",
+					"title": "Les tontons flingueurs",
+					"categories": [
+						{
+							"id": "cat-001",
+							"value": "Comedy"
+						}
+					],
+					"labels": [
+						{
+							"id": "lab-001",
+							"label": "Festival",
+							"color": "purple"
+						}
+					],
+					"shows": [
+						{
+							"id": "sh-1001",
+							"screen": {
+								"id": "scr-001",
+								"screennumber": "01",
+							},
+							"labels": [
+								{
+									"id": "lab-002",
+									"label": "Avant Première",
+									"color": "red"
+								}
+							],
+							"tarifs": [
+								{
+									"id": "tar-moins14",
+									"label": "Moins de 14 ans",
+									"price": 5.0,
+									"currency": "EUR"
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	]
+}
+  </code></pre>
+  <aside class="notes">
+    <p>Ca aurait grandement facilité l'implémentation du frontend</p>
+    <p>J'aurai passé beaucoup moins de temps dessus</p>
+    <p>Ca aurait déchargé le frontend d'un paquet d'appels api.</p>
   </aside>
 </section>
 <section>

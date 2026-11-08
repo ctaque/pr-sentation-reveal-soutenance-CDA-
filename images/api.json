@@ -1,0 +1,54 @@
+{
+	"cinemas": [
+		{
+			"id": "cin-001",
+			"name": "Cinéma Le Katorza",
+			"settings": {
+				"salee_after_show_start": "10m"
+			},
+			"medias": [
+				{
+					"id": "med-101",
+					"title": "Les tontons flingueurs",
+					"categories": [
+						{
+							"id": "cat-001",
+							"value": "Comedy"
+						}
+					],
+					"labels": [
+						{
+							"id": "lab-001",
+							"label": "Festival",
+							"color": "purple"
+						}
+					],
+					"shows": [
+						{
+							"id": "sh-1001",
+							"screen": {
+								"id": "scr-001",
+								"screennumber": "01"
+							},
+							"labels": [
+								{
+									"id": "lab-002",
+									"label": "Avant Première",
+									"color": "red"
+								}
+							],
+							"tarifs": [
+								{
+									"id": "tar-moins14",
+									"label": "Moins de 14 ans",
+									"price": 5.0,
+									"currency": "EUR"
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	]
+}
