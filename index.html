@@ -334,7 +334,7 @@ MAUTIC_PORT=8080
     <small>Au lieu de MongoDB, les users et réservations auraient dû être enregistrés dans PG.</small>
     <small>Au lieu de MongoDB, le cache des datas aurait du être dans un Redis.</small>
   <aside class="notes">
-  <p><small>Avec du recul, d'autres choix architecturaux auraient pu être faits :</small></p>
+  <p><small>Avec du recul, on aurait pu faire d'autres choix architecturaux :</small></p>
    <small>Bdd : les datas de réservations enregistrés dans <strong>Mongo</strong> aurait pu être  stockées dans <strong>Postgresql</strong> : <strong>moins de mises à jour</strong>, moins de nécessité de <strong>corrélation entre les versions de node, du driver et de mongo</strong></small>
   <p>Ca nous aurait épargné la maintenance de Mongodb.</p>
   <p>Les upgrades de Redis coûtent moins cher.</p>
