@@ -306,7 +306,7 @@ MAUTIC_PORT=8080
   </aside>
 				</section>
 <section>
-  <h3 style="font-size: 80%;">Dimensionnement : charge estimée par serveur</h3>
+  <h3 style="font-size: 80%;">System design VAD</h3>
   <img src="images/VAD-system design.png" />
   <aside class="notes">
     <p style="text-decoration: underline;"><small>infra actuelle en scaling vertical :</small></p>
@@ -332,6 +332,18 @@ MAUTIC_PORT=8080
       <li><small>Complexité architecturale supérieure.</small></li>
       <li><small>Nécessite un équilibreur de charge.</small></li>
     </ul>
+  </aside>
+</section>
+<section>
+  <h3>Estimation de charge par serveur</h3>
+  <img src="images/VAD-system design-estimation-charge.png"  />
+</section>
+<section>
+  <h3>Erreurs de conception</h3>
+    <small>Les users et réservations auraient dû être stockées dans PG</small>
+    <small>Les datas en cache auraient du être stockées dans un Redis</small>
+  <aside class="notes">
+  <p>Ca nous aurait épargné la maintenance de Mongodb</p>
   </aside>
 </section>
 <section>
