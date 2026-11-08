@@ -990,26 +990,31 @@ http://localhost:3000
   <h3>Rate limiting</h3>
   <a href="https://express-rate-limit.mintlify.app/overview" target="_blank">Express rate limit</a>
   <pre><code>
-  var RateLimit = require('express-rate-limit');
-  var MongoStore = require('rate-limit-mongo');
+import { rateLimit } from 'express-rate-limit'
+import { RedisStore } from 'rate-limit-redis'
+import { createClient } from 'redis'
 
-  var limiter = new RateLimit({
-    store: new MongoStore({
-      uri: 'mongodb://127.0.0.1:27017/test_db',
-      user: process.env.MONGODB_USER,
-      password: process.env.MONGODB_PASSWORD,
-      // should match windowMs
-      expireTimeMs: 15 * 60 * 1000,
-      errorHandler: console.error.bind(null, 'rate-limit-mongo')
-      // see Configuration section for more options and details
-    }),
-    max: 100,
-    // should match expireTimeMs
-    windowMs: 15 * 60 * 1000
-  });
+// Create a `node-redis` client
+const client = createClient({
+	// ... (see https://github.com/redis/node-redis/blob/master/docs/client-configuration.md)
+})
+// Then connect to the Redis server
+await client.connect()
 
-  //  apply to all requests
-  app.use(limiter);
+// Create and use the rate limiter
+const limiter = rateLimit({
+	// Rate limiter configuration
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+
+	// Redis store configuration
+	store: new RedisStore({
+		sendCommand: (...args: string[]) => client.sendCommand(args),
+	}),
+})
+app.use(limiter)
 </code></pre>
   <aside class="notes">
     <p>Protège les <strong>serveurs</strong>, les <strong>processeurs</strong> et les <strong>bases de données</strong> contre les <strong>plantages</strong> pendant les <strong>pics de trafic</strong></p>
